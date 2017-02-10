@@ -7,7 +7,7 @@ from .custom_path import Path
 from .downloader import Downloader
 from .progress import Progress
 from .singleton import Singleton
-# from .updater import Updater
+from .updater import Updater
 from .threadpool import ThreadPool
 
 
