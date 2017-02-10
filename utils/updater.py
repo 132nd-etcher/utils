@@ -8,11 +8,11 @@ from re import compile
 import humanize
 import semver
 
-from .custom_logging import make_logger
-from .gh import GHRelease, GHSession as GH
-from .downloader import Downloader
-from .progress import Progress
-from .threadpool import ThreadPool
+from utils.custom_logging import make_logger
+from utils.gh import GHRelease, GHSession as GH
+from utils.downloader import Downloader
+from utils.progress import Progress
+from utils.threadpool import ThreadPool
 
 logger = make_logger(__name__)
 

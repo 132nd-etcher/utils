@@ -7,8 +7,8 @@ import certifi
 import six
 import urllib3
 
-from .custom_logging import make_logger
-from .threadpool import ThreadPool
+from utils.custom_logging import make_logger
+from utils.threadpool import ThreadPool
 
 logger = make_logger(__name__)
 

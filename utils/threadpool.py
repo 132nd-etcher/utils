@@ -8,7 +8,7 @@ import threading
 import time
 import traceback
 
-from .custom_logging import make_logger
+from utils.custom_logging import make_logger
 
 # ----------------------------------------------
 # Pre-Sentry
