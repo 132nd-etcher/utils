@@ -78,8 +78,6 @@ class GHAnonymousSession(requests.Session, metaclass=Singleton):
 
     def __parse_resp(self) -> requests.models.Response:
 
-        print(self.__resp)
-
         if self.__resp is None:
             raise RequestFailedError('did not get any response from: {}'.format(self.req))
 
