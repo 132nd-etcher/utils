@@ -28,7 +28,7 @@ setup(
     version='0.0.1',
     author='132nd-etcher',
     url='https://github.com/132nd-etcher/utils',
-    packages=['utils', 'tests', 'utils.gh'],
+    packages=['utils', 'tests', 'utils.gh', 'utils.gh.gh_objects'],
     install_requires=install_requires,
     test_requires=test_requires
 )
