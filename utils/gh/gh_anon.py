@@ -1,9 +1,15 @@
 # coding=utf-8
 import requests
 
+from .gh_errors import GithubAPIError, RateLimitationError, AuthenticationError, GHSessionError, \
+    RequestFailedError, NotFoundError
+from .gh_objects.gh_asset import GHAllAssets, GHAsset
+from .gh_objects.gh_authorization import GHAuthorization
+from .gh_objects.gh_ref import GHRef
+from .gh_objects.gh_release import GHRelease, GHAllReleases
+from .gh_objects.gh_repo import GHRepoList, GHRepo
+from .gh_objects.gh_user import GHUser
 from utils.custom_logging import make_logger
-from utils.gh import GithubAPIError, RateLimitationError, AuthenticationError, GHSessionError, RequestFailedError, \
-    NotFoundError, GHAllAssets, GHAsset, GHAuthorization, GHRelease, GHRef, GHRepo, GHAllReleases, GHRepoList, GHUser
 from utils.singleton import Singleton
 
 logger = make_logger(__name__)
