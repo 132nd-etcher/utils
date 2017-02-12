@@ -69,7 +69,7 @@ def get_file_path(url):
     else:
         file_path = url.netloc + url.path + '.json'
     if not os.path.exists(file_path):
-        file_path = 'tests/{}'.format(file_path)
+        file_path = 'utils/tests/{}'.format(file_path)
     return file_path
 
 
