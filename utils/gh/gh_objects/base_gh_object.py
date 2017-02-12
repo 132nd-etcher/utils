@@ -11,9 +11,9 @@ class BaseGHObject:
 
     @property
     def header(self):
-        return self.json['header']
+        return self.json['header']  # pragma: no cover
 
-    def get_all(self):
+    def get_all(self):  # pragma: no cover
         ret = set()
         for k in self.__class__.__dict__:
             if k.startswith('__'):
@@ -35,7 +35,7 @@ class json_property:
         self.__doc__ = func.__doc__
 
     def __get__(self, obj, _):
-        if obj is None:
+        if obj is None:  # pragma: no cover
             return self
         if not hasattr(obj, 'json'):
             raise NotImplementedError('this object does not support JSON properties')

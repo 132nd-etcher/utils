@@ -54,8 +54,6 @@ class GHRelease(BaseGHObject):
 
     @property
     def version(self):
-        if self.tag_name is None:
-            return None
         return self.tag_name
 
 

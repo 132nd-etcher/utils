@@ -3,7 +3,7 @@
 from ..custom_logging import make_logger
 from ..singleton import Singleton
 from .gh_anon import GHAnonymousSession
-from .gh_errors import GHSessionError
+from .gh_errors import GHSessionError, NotFoundError
 from .gh_objects.gh_mail import GHMail, GHMailList
 from .gh_objects.gh_repo import GHRepoList, GHRepo
 from .gh_objects.gh_user import GHUser
@@ -34,6 +34,11 @@ class GHSession(GHAnonymousSession, metaclass=Singleton):
             import os
             token = os.environ.get('GH_TOKEN', None)
 
+            if token:
+                logger.debug('GH token found in local environment')
+            else:
+                logger.debug('no GH token found in local environment')
+
         self.authenticate(token)
 
         if self.user is False:
@@ -42,10 +47,6 @@ class GHSession(GHAnonymousSession, metaclass=Singleton):
             logger.info('No user')
         else:
             logger.info('authenticated as: {}'.format(self.user))
-
-    @property
-    def has_valid_token(self):
-        return isinstance(self.user, str)
 
     def authenticate(self, token):
         if token is None:
@@ -142,9 +143,8 @@ class GHSession(GHAnonymousSession, metaclass=Singleton):
         self.build_req('repos', user, repo_name)
         try:
             return GHRepo(self._get_json())
-        except GHSessionError as e:
-            if e.msg.startswith('404'):
-                raise FileNotFoundError('repository does not exist')
+        except NotFoundError:
+            raise FileNotFoundError('repository does not exist')
 
     def create_pull_request(
             self,

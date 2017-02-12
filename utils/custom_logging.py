@@ -31,6 +31,9 @@ def make_logger(
     :return: logger object
     """
 
+    if ch_level not in {logging.DEBUG, logging.INFO, logging.WARNING, logging.WARN, logging.ERROR}:
+        raise ValueError('unknown logging level: {}'.format(ch_level))
+
     if fh_level not in {logging.DEBUG, logging.INFO, logging.WARNING, logging.WARN, logging.ERROR}:
         raise ValueError('unknown logging level: {}'.format(fh_level))
 
@@ -74,9 +77,6 @@ def __setup_logger(
     :return: logger object
     """
     global CH, FH
-
-    if fh_level not in [logging.DEBUG, logging.INFO, logging.WARNING, logging.WARN, logging.ERROR]:
-        raise ValueError('unknown logging level: {}'.format(fh_level))
 
     if log_file_path is not None and os.path.exists(log_file_path):
         os.remove(log_file_path)
