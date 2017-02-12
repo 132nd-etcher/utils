@@ -25,7 +25,7 @@ test_requires = [
 # noinspection SpellCheckingInspection
 setup(
     name='utils',
-    version='0.0.3',
+    version='0.0.4',
     author='132nd-etcher',
     url='https://github.com/132nd-etcher/utils',
     packages=['utils', 'utils.tests', 'utils.gh', 'utils.gh.gh_objects', 'utils.decorators'],
