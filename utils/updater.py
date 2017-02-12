@@ -98,6 +98,7 @@ class _Release:
 class Updater:
     def __init__(
             self,
+            executable_name: str,
             current_version: str,
             gh_user: str,
             gh_repo: str,
@@ -105,7 +106,7 @@ class Updater:
             pre_update_func: callable = None,
             cancel_update_func: callable = None,
     ):
-
+        self._executable_name = executable_name
         self._latest = None
         self._current = _Version(current_version)
         self._gh_user = gh_user
@@ -228,8 +229,8 @@ class Updater:
                 humanize.naturalsize(data['downloaded']),
                 humanize.naturalsize(data['total'])
             )
-            Progress.set_label(label)
-            Progress.set_value(data['downloaded'] / data['total'] * 100)
+            Progress.label = label
+            Progress.value = data['downloaded'] / data['total'] * 100
 
         if self._latest_release:
 
@@ -246,7 +247,7 @@ class Updater:
 
                 if asset.name.lower() == self._asset_filename.lower():
 
-                    Progress.start('Downloading latest version', 100, '')
+                    Progress().start('Downloading latest version', 100, '')
                     d = Downloader(
                         url=asset.browser_download_url,
                         filename='./update',
@@ -271,9 +272,9 @@ class Updater:
                 '@echo off',
                 'echo Updating to latest version...',
                 'ping 127.0.0.1 - n 5 - w 1000 > NUL',
-                'move /Y "update" "{}.exe" > NUL'.format(_global.APP_SHORT_NAME),
+                'move /Y "update" "{}.exe" > NUL'.format(self._executable_name),
                 'echo restarting...',
-                'start "" "{}.exe"'.format(_global.APP_SHORT_NAME),
+                'start "" "{}.exe"'.format(self._executable_name),
                 'DEL update.vbs',
                 'DEL "%~f0"',
             ]

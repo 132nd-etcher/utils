@@ -11,7 +11,8 @@ from httmock import response, urlmatch, with_httmock
 from utils.custom_path import Path
 from utils.singleton import Singleton
 from utils.gh import GHAnonymousSession, GHSessionError, NotFoundError, RateLimitationError, GithubAPIError,\
-    GHAllAssets, GHRelease, GHRepo, GHRepoList, GHUser, GHSession
+    GHAllAssets, GHRelease, GHRepo, GHRepoList, GHUser, GHSession, GHAuthorization, GHApp, GHPermissions, GHMailList,\
+    GHMail
 
 
 def test_build_req():
@@ -119,11 +120,28 @@ def test_request_failed():
 
 @with_httmock(mock_gh_api)
 def test_get_repo():
-    repo = GHAnonymousSession().get_repo('132nd-etcher', 'EASI')
+    repo = GHAnonymousSession().get_repo('octocat', 'ze_repo')
 
     assert repo is not None
     assert isinstance(repo, GHRepo)
-    assert repo.name == 'EASI'
+    assert repo.name == 'Hello-World'
+
+    perms = repo.permissions()
+    assert isinstance(perms, GHPermissions)
+    assert perms.admin is False
+    assert perms.pull is True
+    assert perms.push is False
+
+    owner = repo.owner()
+    assert isinstance(owner, GHUser)
+    assert owner.id == 1
+    assert owner.login == 'octocat'
+
+    source = repo.source()
+    assert isinstance(source, GHRepo)
+    assert source.name == 'Hello-World'
+
+
 
 
 @with_httmock(mock_gh_api)
@@ -159,6 +177,9 @@ def test_get_repos():
     assert r.name == 'Hello-World'
     assert r.full_name == 'octocat/Hello-World'
 
+    with pytest.raises(FileNotFoundError):
+        _ = GHSession().get_repo('nope', 'octocat')
+
 
 @with_httmock(mock_gh_api)
 def test_edit_repo():
@@ -192,6 +213,20 @@ def test_list_own_repos():
     repos = s.list_own_repos()
     assert len(repos) == 1
     assert 'Hello-World' in repos
+
+
+@with_httmock(mock_gh_api)
+def test_releases():
+    releases = GHAnonymousSession().get_all_releases('132nd-etcher', 'EASI')
+    assert len(releases) == 2
+    assert len(list(releases.final_only())) == 1
+    assert len(list(releases.prerelease_only())) == 1
+    assert isinstance(releases['rel1'], GHRelease)
+    assert isinstance(releases['rel2'], GHRelease)
+    assert 'rel1' in releases
+    with pytest.raises(AttributeError):
+        _ = releases['rel3']
+    assert ('rel3' in releases) is False
 
 
 @with_httmock(mock_gh_api)
@@ -267,13 +302,11 @@ class TestGHAnonymousSession(TestCase):
         self.assertTrue('README.rst' in latest.assets())
 
 
-class TestGHSessionAuthentication:
-    def test_new_gh_session(self):
-
-        Singleton.wipe_instances('GHSession')
-        # noinspection PyAttributeOutsideInit
-        GHSession()
-        assert GHSession().user == '132nd-etcher'
+def test_new_gh_session(monkeypatch):
+    monkeypatch.delenv('GH_TOKEN')
+    Singleton.wipe_instances('GHSession')
+    GHSession()
+    assert GHSession().user is None
 
 
 def test_user():
@@ -284,3 +317,38 @@ def test_user():
     assert isinstance(usr, GHUser)
     assert usr.id == 21277151
     assert usr.type == 'User'
+
+
+@with_httmock(mock_gh_api)
+def test_authorization():
+    Singleton.wipe_instances('GHSession')
+    GHSession()
+    auth_list = GHSession().list_authorizations(None, None)
+    assert len(auth_list) == 1
+    auth = auth_list[0]
+    assert isinstance(auth, GHAuthorization)
+    app = auth.app()
+    assert isinstance(app, GHApp)
+    assert app.name == 'my github app'
+    assert app.url == 'http://my-github-app.com'
+    assert app.client_id == 'abcde12345fghij67890'
+
+
+@with_httmock(mock_gh_api)
+def test_mail():
+    Singleton.wipe_instances('GHSession')
+    GHSession()
+    assert not GHSession().user
+    mails = GHSession().email_addresses
+    assert isinstance(mails, GHMailList)
+    for mail in mails:
+        assert isinstance(mail, GHMail)
+    for mail in mails:
+        print(mail.email)
+    assert len(mails) == 2
+    assert 'octocat@catsunited.com' in mails
+    assert 'octocat@github.com' in mails
+    with pytest.raises(AttributeError):
+        _ = mails['nope@nil.com']
+    assert 'nope@nil.com' not in mails
+
