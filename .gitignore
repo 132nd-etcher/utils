@@ -1,7 +1,7 @@
 .idea/
 .cache/
-/tests/.hypothesis/
+/utils/tests/.hypothesis/
 /.coverage
 /coverage.xml
 /.hypothesis/
-/tests/coverage/
+/utils/tests/coverage/

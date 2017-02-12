@@ -29,5 +29,5 @@ exclude_lines =
 ignore_errors = True
 
 [html]
-directory = .\tests\coverage
+directory = .\utils\tests\coverage
 title = UTILS coverage report

@@ -25,10 +25,12 @@ test_requires = [
 # noinspection SpellCheckingInspection
 setup(
     name='utils',
-    version='0.0.2',
+    version='0.0.3',
     author='132nd-etcher',
     url='https://github.com/132nd-etcher/utils',
-    packages=['utils', 'tests', 'utils.gh', 'utils.gh.gh_objects', 'utils.decorators'],
+    packages=['utils', 'utils.tests', 'utils.gh', 'utils.gh.gh_objects', 'utils.decorators'],
+    # test_suite='nose.collector',
+    setup_requires=['pytest-runner'],
     install_requires=install_requires,
     test_requires=test_requires
 )
