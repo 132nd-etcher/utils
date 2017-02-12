@@ -9,10 +9,10 @@ import requests
 from httmock import response, urlmatch, with_httmock
 
 from utils.custom_path import Path
-from utils.singleton import Singleton
-from utils.gh import GHAnonymousSession, GHSessionError, NotFoundError, RateLimitationError, GithubAPIError,\
-    GHAllAssets, GHRelease, GHRepo, GHRepoList, GHUser, GHSession, GHAuthorization, GHApp, GHPermissions, GHMailList,\
+from utils.gh import GHAnonymousSession, GHSessionError, NotFoundError, RateLimitationError, GithubAPIError, \
+    GHAllAssets, GHRelease, GHRepo, GHRepoList, GHUser, GHSession, GHAuthorization, GHApp, GHPermissions, GHMailList, \
     GHMail
+from utils.singleton import Singleton
 
 
 def test_build_req():
@@ -69,7 +69,9 @@ def get_file_path(url):
     else:
         file_path = url.netloc + url.path + '.json'
     if not os.path.exists(file_path):
-        file_path = 'utils/tests/{}'.format(file_path)
+        file_path = 'tests/{}'.format(file_path)
+    if not os.path.exists(file_path):
+        file_path = 'utils/{}'.format(file_path)
     return file_path
 
 
@@ -140,8 +142,6 @@ def test_get_repo():
     source = repo.source()
     assert isinstance(source, GHRepo)
     assert source.name == 'Hello-World'
-
-
 
 
 @with_httmock(mock_gh_api)
@@ -351,4 +351,3 @@ def test_mail():
     with pytest.raises(AttributeError):
         _ = mails['nope@nil.com']
     assert 'nope@nil.com' not in mails
-
