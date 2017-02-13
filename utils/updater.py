@@ -9,16 +9,16 @@ import humanize
 import semver
 
 from utils.custom_logging import make_logger
-from utils.gh import GHRelease, GHSession as GH
 from utils.downloader import Downloader
+from utils.gh import GHRelease, GHSession as GH
 from utils.progress import Progress
 from utils.threadpool import ThreadPool
 
 logger = make_logger(__name__)
 
 
-class _Version:
-    re_branch = compile(r'.*\.(?P<branch>.*)\..*')
+class Version:
+    re_branch = compile(r'.*\.(?P<branch>.*)\..*?')
 
     def __init__(self, version_str: str):
         try:
@@ -26,27 +26,27 @@ class _Version:
         except ValueError:
             raise ValueError(version_str)
         self._version_str = version_str
-        self._info = semver.parse_version_info(version_str)
         self._channel = None
         self._branch = None
 
         self._parse()
 
     def _parse(self):
-        if self._info.prerelease is None:
+        info = semver.parse_version_info(self._version_str)
+        if info.prerelease is None:
             self._channel = 'stable'
-        elif self._info.prerelease.startswith('alpha.'):
+        elif info.prerelease.startswith('alpha.'):
             self._channel = 'alpha'
-            self._branch = self.re_branch.match(self._info.prerelease).group('branch')
-        elif self._info.prerelease.startswith('beta.'):
+            self._branch = self.re_branch.match(info.prerelease).group('branch')
+        elif info.prerelease.startswith('beta.'):
             self._channel = 'beta'
-            self._branch = self.re_branch.match(self._info.prerelease).group('branch')
-        elif self._info.prerelease.startswith('dev.'):
+            self._branch = self.re_branch.match(info.prerelease).group('branch')
+        elif info.prerelease.startswith('dev'):
             self._channel = 'dev'
-        elif self._info.prerelease.startswith('rc.'):
+        elif info.prerelease.startswith('rc'):
             self._channel = 'rc'
         else:
-            raise ValueError(self._info.prerelease)
+            raise ValueError(info.prerelease)
 
     @property
     def branch(self) -> str or None:
@@ -73,10 +73,25 @@ class _Version:
         return self._version_str
 
 
-class _Release:
+class GithubRelease:
     def __init__(self, gh_release: GHRelease):
         self._gh_release = gh_release
-        self._version = _Version(self._gh_release.version)
+        self._version = Version(self._gh_release.version)
+
+    def get_asset_download_url(self, filename):
+
+        logger.debug('found {} assets'.format(self._gh_release.assets_count))
+
+        for asset in self._gh_release.assets:
+
+            logger.debug('eval asset: {}'.format(asset.name))
+
+            if asset.name.lower() == filename.lower():
+                logger.debug('asset found, returning download url: {}'.format(asset.browser_download_url))
+                return asset.browser_download_url
+
+        logger.warning('no asset found with name: {}'.format(filename))
+        return None
 
     @property
     def version(self):
@@ -84,7 +99,7 @@ class _Release:
 
     @property
     def assets(self):
-        return self._gh_release.assets()
+        return self._gh_release.assets
 
     @property
     def channel(self) -> str:
@@ -96,6 +111,16 @@ class _Release:
 
 
 class Updater:
+    channel_weights = dict(
+        alpha=0,
+        beta=1,
+        dev=2,
+        rc=3,
+        stable=4
+    )
+
+    valid_channels = ['alpha', 'beta', 'dev', 'rc', 'stable']
+
     def __init__(
             self,
             executable_name: str,
@@ -107,8 +132,7 @@ class Updater:
             cancel_update_func: callable = None,
     ):
         self._executable_name = executable_name
-        self._latest = None
-        self._current = _Version(current_version)
+        self._current = Version(current_version)
         self._gh_user = gh_user
         self._gh_repo = gh_repo
         self._available = {}
@@ -124,6 +148,8 @@ class Updater:
 
     def _get_available_releases(self):
 
+        self._available = {}
+
         gh = GH()
 
         logger.debug('querying GH API for available releases')
@@ -132,54 +158,40 @@ class Updater:
         if releases:
             for rel in releases:
                 logger.debug('release found: {}'.format(rel.version))
-                self._available[rel.version] = _Release(rel)
+                self._available[rel.version] = GithubRelease(rel)
+
+        else:
+            logger.error('no release found for "{}/{}"'.format(self._gh_user, self._gh_repo))
 
     @property
     def available(self) -> list or None:
         return self._available
 
     @property
-    def latest(self) -> _Release or None:
-        return self._latest
+    def latest_release(self) -> GithubRelease or None:
+        return self._latest_release
 
-    def _version_check(self, channel: str):
+    def _version_check(self, channel: str = 'stable'):
 
-        logger.info('checking for new version')
+        if channel not in Updater.valid_channels:
+            raise ValueError(channel)
+
+        logger.info('checking for new version on channel: {}'.format(channel))
+        min_weight = Updater.channel_weights[channel]
 
         self._get_available_releases()
 
+        self._candidates = {}
+
         for version, release in self._available.items():
 
-            skip = []
+            version = Version(version)
 
-            if channel == 'alpha':
-                pass
-            elif channel == 'beta':
-                skip.append('alpha')
-            elif channel == 'dev':
-                skip.append('beta')
-            elif channel == 'rc':
-                skip.append('dev')
-            elif channel == 'stable':
-                skip.append('rc')
-            else:
-                raise ValueError(channel)
-
-            assert isinstance(release, _Release)
-
-            logger.debug('comparing current with remote: "{}" vs "{}"'.format(self._current, version))
-
-            version = _Version(version)
-
-            if version.channel in skip:
-                logger.debug('skipping release with channel: {}'.format(version.channel))
+            if Updater.channel_weights[version.channel] < min_weight:
+                logger.debug('skipping release on channel: {}'.format(version.channel))
                 continue
 
-            if version.channel in ['alpha', 'beta']:
-
-                logger.debug('comparing branch name')
-                if not self._current.branch == version.branch:
-                    logger.debug('skipping branch: {}'.format(version.branch))
+            logger.debug('comparing current with remote: "{}" vs "{}"'.format(self._current, version))
 
             if version > self._current:
                 logger.debug('this version is newer: {}'.format(version))
@@ -207,7 +219,7 @@ class Updater:
             for version, release in self._candidates.items():
                 logger.debug('comparing "{}" and "{}"'.format(latest, version))
 
-                version = _Version(version)
+                version = Version(version)
 
                 if version > self._current:
                     logger.debug('{} is newer'.format(version))
@@ -223,6 +235,8 @@ class Updater:
 
     def _download_latest_release(self):
 
+        self._update_ready_to_install = False
+
         def _progress_hook(data):
             label = 'Time left: {} ({}/{})'.format(
                 data['time'],
@@ -236,10 +250,13 @@ class Updater:
 
             logger.debug('downloading latest release asset')
 
-            assert isinstance(self._latest_release, _Release)
-            assets = self._latest_release.assets
+            assert isinstance(self._latest_release, GithubRelease)
+            asset = self._latest_release.get_asset_download_url(self._asset_filename)
 
-            logger.debug('found {} assets'.format(len(assets)))
+            if asset is None:
+                logger.error('no asset found with filename: {}'.format(self._asset_filename))
+
+            assets = self._latest_release.assets
 
             for asset in assets:
 
@@ -255,10 +272,16 @@ class Updater:
                     )
                     if d.download():
                         self._update_ready_to_install = True
+                    else:
+
+                        logger.error('download failed')
+
+                        if self._cancel_update_func:
+                            self._cancel_update_func()
 
         else:
 
-            logger.debug('no release to download')
+            logger.warning('no release to download')
 
             if self._cancel_update_func:
                 self._cancel_update_func()
@@ -303,9 +326,20 @@ class Updater:
         if new_version_found:
             logger.debug('new version found, proceeding')
 
-            self.pool.queue_task(self._process_candidates, _err_callback=self._cancel_update_func)
-            self.pool.queue_task(self._download_latest_release, _err_callback=self._cancel_update_func)
-            self.pool.queue_task(self._install_update, _err_callback=self._cancel_update_func)
+            self.pool.queue_task(
+                task=self._process_candidates,
+                _err_callback=self._cancel_update_func
+            )
+
+            self.pool.queue_task(
+                task=self._download_latest_release,
+                _err_callback=self._cancel_update_func
+            )
+
+            self.pool.queue_task(
+                task=self._install_update,
+                _err_callback=self._cancel_update_func
+            )
 
     def version_check(self, channel: str):
 

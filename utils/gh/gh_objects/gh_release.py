@@ -46,11 +46,17 @@ class GHRelease(BaseGHObject):
     def body(self):
         """"""
 
+    @property
     def author(self):
         return GHUser(self.json['author'])
 
+    @property
     def assets(self):
         return GHAllAssets(self.json['assets'])
+
+    @property
+    def assets_count(self):
+        return len(self.assets)
 
     @property
     def version(self):

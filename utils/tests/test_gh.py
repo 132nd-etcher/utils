@@ -218,9 +218,9 @@ def test_list_own_repos():
 @with_httmock(mock_gh_api)
 def test_releases():
     releases = GHAnonymousSession().get_all_releases('132nd-etcher', 'EASI')
-    assert len(releases) == 2
+    assert len(releases) == 7
     assert len(list(releases.final_only())) == 1
-    assert len(list(releases.prerelease_only())) == 1
+    assert len(list(releases.prerelease_only())) == 6
     assert isinstance(releases['rel1'], GHRelease)
     assert isinstance(releases['rel2'], GHRelease)
     assert 'rel1' in releases
@@ -233,9 +233,9 @@ def test_releases():
 def test_get_latest_release():
     latest = GHAnonymousSession().get_latest_release('132nd-etcher', 'EASI')
     assert latest.assets_url == 'https://api.github.com/repos/octocat/Hello-World/releases/1/assets'
-    assert isinstance(latest.assets(), GHAllAssets)
-    assert len(latest.assets()) == 1
-    assert isinstance(latest.author(), GHUser)
+    assert isinstance(latest.assets, GHAllAssets)
+    assert len(latest.assets) == 1 == latest.assets_count
+    assert isinstance(latest.author, GHUser)
     assert latest.body == 'Description of the release'
     assert latest.created_at == '2013-02-27T19:35:32Z'
     assert latest.draft is False
@@ -295,11 +295,11 @@ class TestGHAnonymousSession(TestCase):
         except RateLimitationError:
             return
         self.assertIsInstance(latest, GHRelease)
-        self.assertSequenceEqual(latest.author().login, '132nd-etcher')
+        self.assertSequenceEqual(latest.author.login, '132nd-etcher')
         self.assertFalse(latest.prerelease)
         self.assertSequenceEqual(latest.name, 'Final-release 1')
         self.assertSequenceEqual(latest.tag_name, '0.0.1.0')
-        self.assertTrue('README.rst' in latest.assets())
+        self.assertTrue('README.rst' in latest.assets)
 
 
 def test_new_gh_session(monkeypatch):
@@ -343,8 +343,6 @@ def test_mail():
     assert isinstance(mails, GHMailList)
     for mail in mails:
         assert isinstance(mail, GHMail)
-    for mail in mails:
-        print(mail.email)
     assert len(mails) == 2
     assert 'octocat@catsunited.com' in mails
     assert 'octocat@github.com' in mails
