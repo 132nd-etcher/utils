@@ -2,6 +2,7 @@
 
 import hashlib
 import time
+import os
 
 import certifi
 import six
@@ -13,16 +14,21 @@ from utils.threadpool import ThreadPool
 logger = make_logger(__name__)
 
 
-def get_hash(data):
+def get_hash(data, method: str = 'md5'):
 
     if six.PY3:
         if not isinstance(data, bytes):
             data = bytes(data, 'utf-8')
 
-    hash_ = hashlib.sha256(data).hexdigest()
-    logger.debug('hash for binary data: %s', hash_)
+    try:
+        func = getattr(hashlib, method)
+    except AttributeError:
+        raise RuntimeError('cannot find method "{}" in hashlib'.format(method))
+    else:
+        hash_ = func(data).hexdigest()
+        logger.debug('hash for binary data: %s', hash_)
 
-    return hash_
+        return hash_
 
 
 def get_http_pool():
@@ -39,7 +45,8 @@ class Downloader:
                  concurrent_download: int = 1,
                  download_retries: int = 3,
                  block_size: int = 4096 * 4,
-                 progress_hooks: list = None
+                 progress_hooks: list = None,
+                 hash_method: str = 'md5',
                  ):
 
         self.pool = ThreadPool(_num_threads=concurrent_download, _basename='download', _daemon=True)
@@ -51,7 +58,10 @@ class Downloader:
         self.http_pool = get_http_pool()
         self.hexdigest = hexdigest
         self.file_binary_data = None
+        if progress_hooks is not None and not isinstance(progress_hooks, list):
+            raise TypeError(type(progress_hooks))
         self.progress_hooks = progress_hooks or []
+        self.hash_method = hash_method
 
     def _write_to_file(self):
 
@@ -71,7 +81,7 @@ class Downloader:
         logger.debug('checking file hash')
         logger.debug('update hash: %s', self.hexdigest)
 
-        file_hash = get_hash(self.file_binary_data)
+        file_hash = get_hash(self.file_binary_data, self.hash_method)
 
         if file_hash == self.hexdigest:
             logger.debug('file hash verified')
@@ -255,4 +265,9 @@ class Downloader:
 
         else:
             del self.file_binary_data
+            if os.path.exists(self.filename):
+                try:
+                    os.remove(self.filename)
+                except OSError:
+                    pass
             return False

@@ -60,6 +60,8 @@ class Validator:
         if self.path_exists and not exists(value):
             self.error('"{}" does not exist: {}'.format(param_name, value))
 
+        return True
+
     def error(self, error_msg):
         if self.logger is not None:
             self.logger.error(error_msg)
@@ -77,7 +79,7 @@ valid_float = Validator(_type=float)
 valid_existing_path = Validator(_path_exists=True)
 valid_list = Validator(_type=list)
 valid_dict = Validator(_type=dict)
-not_a_str = [-1, True, False, None, 1234, {}, []]
-not_an_int = [True, False, None, '', 'meh', {}, [], 12.34]
-not_a_positive_int = [True, False, None, '', 'meh', {}, [], 12.34, -1, -100000]
-not_a_bool = [None, 1, 12.34, 'meh', [], {}]
+not_a_str = [-1, True, False, None, 1234, dict(), list(), set(), tuple()]
+not_an_int = [True, False, None, '', 'meh', 12.34, dict(), list(), set(), tuple()]
+not_a_positive_int = [True, False, None, '', 'meh', 12.34, -1, -100000, dict(), list(), set(), tuple()]
+not_a_bool = [None, 1, 12.34, 'meh', dict(), list(), set(), tuple()]

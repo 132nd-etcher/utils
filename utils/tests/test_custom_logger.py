@@ -1,6 +1,6 @@
 # coding=utf-8
 
-from logging import Logger, Handler, LogRecord
+from logging import Logger, Handler, LogRecord, disable, ERROR, NOTSET
 from utils.custom_logging import make_logger, Logged
 import pytest
 import os
@@ -67,20 +67,22 @@ class TestCustomLogging:
         mock = mocker.MagicMock()
         handler.emit = mock
 
-        logger = make_logger(custom_handler=handler)
+        logger = make_logger('__main__')
+        logger.handlers = [handler]
 
-        assert handler in logger.handlers
-
+        disable(NOTSET)
         logger.debug('test')
 
-        assert mock.call_count == 2
-        emit_call = mock.mock_calls[1]
+        assert mock.call_count == 1
+        emit_call = mock.mock_calls[0]
         name, args, kwargs = emit_call
         assert name == ''
         log_record = args[0]
         assert isinstance(log_record, LogRecord)
         assert log_record.msg == 'test'
         assert log_record.levelname == 'DEBUG'
+
+        disable(ERROR)
 
     def test_sublogger_handler(self):
 
