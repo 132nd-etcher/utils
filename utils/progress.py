@@ -1,114 +1,113 @@
 # coding=utf-8
 
-from abc import abstractmethod, abstractproperty
-
-from .decorators import TypedProperty
-from .singleton import Singleton
+# noinspection PyProtectedMember
+from abc import abstractmethod
 
 
 class ProgressAdapter:
-    @abstractproperty
-    def name(self) -> str:
-        """"""
-
+    @staticmethod
     @abstractmethod
-    def start(self, title: str, length: int = 100, label: str = ''):
+    def progress_start(title: str, length: int = 100, label: str = ''):
         """"""
 
+    @staticmethod
     @abstractmethod
-    def set_value(self, value: int):
+    def progress_set_value(value: int):
         """"""
 
+    @staticmethod
     @abstractmethod
-    def set_label(self, value: str):
+    def progress_set_label(value: str):
         """"""
 
+    @staticmethod
     @abstractmethod
-    def done(self):
+    def progress_done():
         """"""
 
 
-class Progress(metaclass=Singleton):
-    def __init__(self, adapters: list = None):
-        if adapters is None:
-            adapters = []
-        else:
-            for adapter in adapters:
-                self._check_adapter(adapter)
-        self._adapters = adapters
-        self._title = None
-        self._label = None
-        self._value = 0
-        self._length = 100
-        self._is_started = False
+class Progress:
+    def __init__(self):
+        raise RuntimeError('do NOT instantiate')
+
+    adapters = []
+    title = None
+    label = None
+    value = 0
+    length = 100
+    started = False
 
     @staticmethod
     def _check_adapter(adapter):
-        if not isinstance(adapter, ProgressAdapter):
-            raise TypeError(type(adapter))
+        if not issubclass(adapter, ProgressAdapter):
+            raise TypeError(adapter.__class__)
 
-    def has_adapter(self, adapter: str or ProgressAdapter = None):
-        if isinstance(adapter, ProgressAdapter):
-            adapter = adapter.name
-        for adapter_ in self._adapters:
-            if adapter_.name == adapter:
-                return True
+    @staticmethod
+    def has_adapter(adapter: ProgressAdapter):
+        return adapter in Progress.adapters
 
-    def register_adapter(self, adapter: ProgressAdapter):
-        self._check_adapter(adapter)
-        if self.has_adapter(adapter):
-            raise RuntimeError('adapter already registered: {}'.format(adapter.name))
-        self._adapters.append(adapter)
+    @staticmethod
+    def register_adapter(adapter: ProgressAdapter):
+        Progress._check_adapter(adapter)
+        if Progress.has_adapter(adapter):
+            return
+        Progress.adapters.append(adapter)
 
-    def unregister_adapter(self, adapter: ProgressAdapter or str):
-        if isinstance(adapter, ProgressAdapter):
-            adapter = adapter.name
-        if self.has_adapter(adapter):
-            for adapter_ in self._adapters:
-                if adapter_.name == adapter:
-                    self._adapters.remove(adapter_)
-                    return True
+    @staticmethod
+    def unregister_adapter(adapter: ProgressAdapter or str):
+        if Progress.has_adapter(adapter):
+            Progress.adapters.remove(adapter)
 
-    @property
-    def is_started(self):
-        return self._is_started
+    @staticmethod
+    def start(title: str, length: int = 100, label: str = '', start_value: int = 0):
+        if Progress.started:
+            raise RuntimeError()
+        if length < 1:
+            raise ValueError(length)
+        Progress.started = True
+        Progress.set_value(start_value)
+        Progress.set_label(label)
+        Progress.set_title(title)
+        Progress.set_length(length)
+        for adapter in Progress.adapters:
+            adapter.progress_start(title, length, label)
 
-    @TypedProperty(int)
-    def value(self, value: int) -> int:
-        if value > self.length:
+    @staticmethod
+    def set_value(value: int):
+        if not isinstance(value, int):
+            raise TypeError(type(value))
+        if value > Progress.length:
             raise ValueError(value)
-        if value == self.length:
-            self.done()
-        return value
+        for adapter in Progress.adapters:
+            adapter.progress_set_value(value)
+        Progress.value = value
+        if value == Progress.length:
+            Progress.done()
 
-    @TypedProperty(str)
-    def title(self, value: str) -> str:
-        return value
+    @staticmethod
+    def set_label(value: str):
+        if not isinstance(value, str):
+            raise TypeError(type(value))
+        Progress.label = value
+        for adapter in Progress.adapters:
+            adapter.progress_set_label(value)
 
-    @TypedProperty(str)
-    def label(self, value: str) -> str:
-        return value
+    @staticmethod
+    def set_length(value: int):
+        if not isinstance(value, int):
+            raise TypeError(value)
+        if value < 1:
+            raise ValueError(value)
+        Progress.length = value
 
-    @TypedProperty(int)
-    def length(self, value: int) -> int:
-        if value <= 0:
-            raise ValueError('expected a positive integer, got: {}'.format(value))
-        return value
+    @staticmethod
+    def set_title(value: str):
+        if not isinstance(value, str):
+            raise TypeError(type(value))
+        Progress.title = value
 
-    def start(self, title: str, length: int = 100, label: str = '', start_index: int = 0):
-        if self.is_started:
-            raise RuntimeError('progress already running')
-        for adapter in self._adapters:
-            assert isinstance(adapter, ProgressAdapter)
-            adapter.start(title, length, label)
-        self.length = length
-        self.title = title
-        self.label = label
-        self.value = start_index
-        self._is_started = True
-
-    def done(self):
-        for adapter in self._adapters:
-            assert isinstance(adapter, ProgressAdapter)
-            adapter.done()
-        self._is_started = False
+    @staticmethod
+    def done():
+        Progress.started = False
+        for adapter in Progress.adapters:
+            adapter.progress_done()
