@@ -6,7 +6,7 @@ from hypothesis import given
 from hypothesis.strategies import text, integers
 
 not_a_string = [int(0), None, True, float(3.5)]
-not_an_int = ['text', None, float(3.5)]  # not including bool because it's an instance of int
+not_an_int = ['text', None]  # not including bool because it's an instance of int
 
 
 class TestProgressAdapter(ProgressAdapter):

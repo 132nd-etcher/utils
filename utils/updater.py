@@ -243,8 +243,8 @@ class Updater:
                 humanize.naturalsize(data['downloaded']),
                 humanize.naturalsize(data['total'])
             )
-            Progress.label = label
-            Progress.value = data['downloaded'] / data['total'] * 100
+            Progress.set_label(label)
+            Progress.set_value(data['downloaded'] / data['total'] * 100)
 
         if self._latest_release:
 
@@ -264,7 +264,10 @@ class Updater:
 
                 if asset.name.lower() == self._asset_filename.lower():
 
-                    Progress().start('Downloading latest version', 100, '')
+                    Progress.start(
+                        title='Downloading latest version',
+                        length=100,
+                        label='')
                     d = Downloader(
                         url=asset.browser_download_url,
                         filename='./update',

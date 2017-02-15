@@ -171,14 +171,14 @@ class TestUpdater:
 
                 upd._download_latest_release()
                 assert upd._update_ready_to_install
-                Progress().done()
+                Progress.done()
 
                 DummyDownloader.download_return = False
 
                 upd._download_latest_release()
                 cancel.assert_called_once_with()
                 assert not upd._update_ready_to_install
-                Progress().done()
+                Progress.done()
 
             else:
 
