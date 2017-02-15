@@ -73,8 +73,8 @@ class Progress:
             adapter.progress_start(title, length, label)
 
     @staticmethod
-    def set_value(value: int):
-        if not isinstance(value, int):
+    def set_value(value: (int, float)):
+        if not isinstance(value, (int, float)):
             raise TypeError(type(value))
         if value > Progress.length:
             raise ValueError(value)
