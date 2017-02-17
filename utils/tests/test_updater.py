@@ -5,10 +5,7 @@ from httmock import HTTMock
 
 from utils import Path, Downloader, Progress
 from utils.updater import Version, Updater, GithubRelease
-from .test_gh import mock_gh_api
-
-
-
+from .test_gh import mock_gh_api, GHRelease
 
 valid_versions = {
     '0.0.0+1': {
@@ -95,6 +92,44 @@ updater_version = [
     ('0.0.6', 'alpha', False),
 ]
 
+dummy_gh_release = [
+    ({"tag_name": "0.0.1"}, '0.0.1', 'stable', None),
+    ({"tag_name": "0.0.2-alpha.test.1"}, '0.0.2-alpha.test.1', 'alpha', 'test'),
+    ({"tag_name": "0.0.2-beta.test.1+532"}, '0.0.2-beta.test.1', 'beta', 'test'),
+    ({"tag_name": "0.0.3-rc.1"}, '0.0.3-rc.1', 'rc', None),
+]
+
+dummy_gh_assets = [
+    (
+        {"tag_name": "0.0.1",
+         "assets":
+             [
+                 {"browser_download_url": "the_url", "name": "example.zip"},
+             ]
+         },
+        'example.zip', 'the_url'
+    ),
+    (
+        {"tag_name": "0.0.1",
+         "assets":
+             [
+                 {"browser_download_url": "the_url1", "name": "EXAMPLE1"},
+                 {"browser_download_url": "the_url2", "name": "EXAMPLE2"},
+                 {"browser_download_url": "the_url3", "name": "EXAMPLE3"},
+                 {"browser_download_url": "the_url4", "name": "EXAMPLE4"},
+             ]
+         },
+        'example3', 'the_url3'
+    ),
+]
+
+dummy_candidates = {
+    '0.0.2': GithubRelease(GHRelease({"tag_name": "0.0.2"})),
+    '0.0.1': GithubRelease(GHRelease({"tag_name": "0.0.1"})),
+    '0.0.3': GithubRelease(GHRelease({"tag_name": "0.0.3"})),
+    '0.0.4': GithubRelease(GHRelease({"tag_name": "0.0.4"})),
+}
+
 
 class TestUpdater:
     def test_no_release(self, tmpdir):
@@ -105,10 +140,61 @@ class TestUpdater:
             upd._get_available_releases()
             assert not upd.available
 
+    def test_pre_hook_is_false(self, tmpdir, mocker):
+        def pre_hook():
+            return False
+
+        post_hook = mocker.MagicMock()
+
+        p = Path(tmpdir.join('test.exe'))
+        upd = Updater(p.abspath(), '0.0.1', '132nd-etcher', 'EASI', 'example.zip', pre_hook, post_hook)
+
+        with HTTMock(mock_gh_api):
+            upd._version_check('alpha')
+            assert upd.available
+            assert upd._process_candidates() is False
+            post_hook.assert_called_once_with()
+
+        upd = Updater(p.abspath(), '0.0.1', '132nd-etcher', 'EASI', 'example.zip', pre_hook)
+
+        with HTTMock(mock_gh_api):
+            upd._version_check('alpha')
+            assert upd.available
+            assert upd._process_candidates() is False
+
+    # @pytest.mark.parametrize('candidates', dummy_candidates)
+    def test_process_candidates(self, tmpdir):
+        p = Path(tmpdir.join('test.exe'))
+
+        upd = Updater(p.abspath(), '0.0.1', '132nd-etcher', 'EASI', 'example.zip')
+
+        upd._candidates = dummy_candidates
+        assert upd._process_candidates() is True
+
+        upd._current = Version('0.0.5')
+        assert upd._process_candidates() is False
+
+    @pytest.mark.parametrize('gh_release', dummy_gh_release)
+    def test_gh_release(self, gh_release):
+
+        json, version_str, channel, branch = gh_release
+
+        gh_rel = GithubRelease(GHRelease(json))
+        assert gh_rel.version == Version(version_str)
+        assert gh_rel.channel == channel
+        assert gh_rel.branch == branch
+
+    @pytest.mark.parametrize('gh_assets', dummy_gh_assets)
+    def test_gh_release_assets(self, gh_assets):
+        json, asset_name, dld_url = gh_assets
+        gh_rel = GithubRelease(GHRelease(json))
+        assert gh_rel.get_asset_download_url('some_asset') is None
+        assert gh_rel.get_asset_download_url(asset_name) == dld_url
+
     @pytest.mark.parametrize('channel', ['Alpha', '_beta', 'STABLE', 'random', 1, True, None, float(3)])
     def test_wrong_channel(self, channel, tmpdir):
         p = Path(tmpdir.join('test.exe'))
-        upd = Updater(p.abspath(), '0.0.1', '132nd-etcher', 'no_release', 'example.zip')
+        upd = Updater(p.abspath(), '0.0.1', '132nd-etcher', 'EASI', 'example.zip')
         with pytest.raises(ValueError):
             upd._version_check(channel)
 
