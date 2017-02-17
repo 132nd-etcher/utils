@@ -11,10 +11,4 @@ from .updater import Updater
 from .threadpool import ThreadPool
 from .decorators import TypedProperty
 from .pastebin import create_new_paste
-
-
-def nice_exit(*_):
-    import os
-    # Shameful monkey-patching to bypass windows being a jerk
-    # noinspection PyProtectedMember
-    os._exit(0)
+from .monkey import nice_exit
