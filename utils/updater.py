@@ -13,6 +13,7 @@ from utils.downloader import Downloader
 from utils.gh import GHRelease, GHSession as GH
 from utils.progress import Progress
 from utils.threadpool import ThreadPool
+from utils.monkey import nice_exit
 
 logger = make_logger(__name__)
 
@@ -131,6 +132,15 @@ class Updater:
             pre_update_func: callable = None,
             cancel_update_func: callable = None,
     ):
+        """
+        :param executable_name: local file to update (usually self)
+        :param current_version: current running version
+        :param gh_user: Github user name
+        :param gh_repo: Github repo name
+        :param asset_filename: name of the asset in the Github release, susually identical to executable_name
+        :param pre_update_func: callable to run before the update; if it returns False, update cancels
+        :param cancel_update_func: callable to run in case the update gets cancelled at any point
+        """
         self._executable_name = executable_name
         self._current = Version(current_version)
         self._gh_user = gh_user
@@ -212,7 +222,17 @@ class Updater:
         if self._candidates:
 
             if self._pre_update is not None:
-                self._pre_update()
+
+                logger.debug('running pre-update hook')
+
+                if not self._pre_update():
+
+                    logger.debug('pre-update hook returned False, cancelling update')
+
+                    if self._cancel_update_func:
+                        self._cancel_update_func()
+
+                    return False
 
             latest = self._current
 
@@ -226,12 +246,16 @@ class Updater:
                     latest = version
                     self._latest_release = release
 
+            return not latest == self._current
+
         else:
 
             logger.debug('no release candidate')
 
             if self._cancel_update_func:
                 self._cancel_update_func()
+
+            return False
 
     def _download_latest_release(self):
 
@@ -315,7 +339,8 @@ class Updater:
             args = ['wscript.exe', 'update.vbs', 'update.bat']
             subprocess.Popen(args)
             # noinspection PyProtectedMember
-            os._exit(0)
+            # os._exit(0)
+            nice_exit(0)
 
         else:
 
