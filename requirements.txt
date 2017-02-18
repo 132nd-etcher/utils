@@ -1,0 +1,17 @@
+certifi==2017.1.23
+colorama==0.3.7
+coverage==4.3.4
+httmock==1.2.6
+humanize==0.5.1
+hypothesis==3.6.1
+path.py==10.1
+py==1.4.32
+pypiwin32==219
+pytest==3.0.6
+pytest-cov==2.4.0
+pytest-mock==1.5.0
+pytest-runner==2.11.1
+requests==2.13.0
+semver==2.7.5
+urllib3==1.20
+

@@ -303,7 +303,10 @@ class TestGHAnonymousSession(TestCase):
 
 
 def test_new_gh_session(monkeypatch):
-    monkeypatch.delenv('GH_TOKEN')
+    try:
+        monkeypatch.delenv('GH_TOKEN')
+    except KeyError:
+        pass
     Singleton.wipe_instances('GHSession')
     GHSession()
     assert GHSession().user is None

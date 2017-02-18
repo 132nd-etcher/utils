@@ -5,7 +5,6 @@ import time
 import os
 
 import certifi
-import six
 import urllib3
 
 from utils.custom_logging import make_logger
@@ -16,9 +15,8 @@ logger = make_logger(__name__)
 
 def get_hash(data, method: str = 'md5'):
 
-    if six.PY3:
-        if not isinstance(data, bytes):
-            data = bytes(data, 'utf-8')
+    if not isinstance(data, bytes):
+        data = bytes(data, 'utf-8')
 
     try:
         func = getattr(hashlib, method)

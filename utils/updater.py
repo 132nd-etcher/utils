@@ -1,9 +1,8 @@
 # coding=utf-8
 
 import io
-import os
 import subprocess
-from re import compile
+import re
 
 import humanize
 import semver
@@ -19,7 +18,7 @@ logger = make_logger(__name__)
 
 
 class Version:
-    re_branch = compile(r'.*\.(?P<branch>.*)\..*?')
+    re_branch = re.compile(r'.*\.(?P<branch>.*)\..*?')
 
     def __init__(self, version_str: str):
         try:
