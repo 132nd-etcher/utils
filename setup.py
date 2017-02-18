@@ -4,18 +4,21 @@ from setuptools import setup
 
 # noinspection SpellCheckingInspection
 install_requires = [
-    'six',
     'path.py',
     'urllib3',
     'humanize',
     'pypiwin32',
     'certifi',
-    'wincertstore',
     'semver',
     'requests']
 # noinspection SpellCheckingInspection
 test_requires = [
+    'colorama',
+    'coverage',
     'pytest',
+    'pytest-mock',
+    'pytest-cov',
+    'pytest-runner',
     'colorama',
     'py',
     'hypothesis',

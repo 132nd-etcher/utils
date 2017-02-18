@@ -174,7 +174,7 @@ class Path(path.Path):
         if must_exist and not self.exists():
             raise ValueError('directory does not exist: {}'.format(self.abspath()))
 
-        for root, dirnames, filenames in os.walk(str(self.abspath())):
+        for root, _, filenames in os.walk(str(self.abspath())):
             for file in filenames:
                 os.chmod(root + '\\' + file, 0o777)
                 os.remove(root + '\\' + file)
