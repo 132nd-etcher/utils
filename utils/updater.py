@@ -202,6 +202,11 @@ class Updater:
 
             logger.debug('comparing current with remote: "{}" vs "{}"'.format(self._current, version))
 
+            if self._current.channel == 'alpha' and not self._current.branch == version.branch:
+                logger.debug('skipping different alpha branch; own: {} remote: {}'.format(
+                    self._current.branch, version.branch
+                ))
+
             if version > self._current:
                 logger.debug('this version is newer: {}'.format(version))
                 self._candidates[version.version_str] = release
