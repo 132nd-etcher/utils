@@ -186,9 +186,14 @@ class Updater:
             raise ValueError(channel)
 
         logger.info('checking for new version on channel: {}'.format(channel))
-        min_weight = Updater.channel_weights[channel]
 
         self._get_available_releases()
+
+        return self._build_candidates_list(channel)
+
+    def _build_candidates_list(self, channel):
+
+        min_weight = Updater.channel_weights[channel]
 
         self._candidates = {}
 
@@ -202,10 +207,11 @@ class Updater:
 
             logger.debug('comparing current with remote: "{}" vs "{}"'.format(self._current, version))
 
-            if self._current.channel == 'alpha' and not self._current.branch == version.branch:
+            if self._current.branch is not None and not self._current.branch == version.branch:
                 logger.debug('skipping different alpha branch; own: {} remote: {}'.format(
                     self._current.branch, version.branch
                 ))
+                continue
 
             if version > self._current:
                 logger.debug('this version is newer: {}'.format(version))
