@@ -31,10 +31,10 @@ valid_versions = {
 }
 
 valid_versions = [(
-                      k,
-                      valid_versions[k]['channel'],
-                      valid_versions[k]['branch'],
-                  ) for k in valid_versions]
+    k,
+    valid_versions[k]['channel'],
+    valid_versions[k]['branch'],
+) for k in valid_versions]
 
 ordered_versions = [
     '0.0.0-alpha.test.15',
@@ -129,6 +129,36 @@ dummy_candidates = {
     '0.0.3': GithubRelease(GHRelease({"tag_name": "0.0.3"})),
     '0.0.4': GithubRelease(GHRelease({"tag_name": "0.0.4"})),
 }
+
+dummy_branches = [
+    ('0.0.2-alpha.branch1.2', {
+        '0.0.2-alpha.branch1.2': GithubRelease(GHRelease({"tag_name": "0.0.2-alpha.branch1.2"})),
+        '0.0.2-alpha.branch2.3': GithubRelease(GHRelease({"tag_name": "0.0.2-alpha.branch2.3"})),
+        '0.0.2-alpha.branch3.3': GithubRelease(GHRelease({"tag_name": "0.0.2-alpha.branch3.3"})),
+    }, False),
+    ('0.0.2-alpha.branch1.1', {
+        '0.0.2-alpha.branch1.2': GithubRelease(GHRelease({"tag_name": "0.0.2-alpha.branch1.2"})),
+    }, True),
+    ('0.0.2-alpha.branch2.1', {
+        '0.0.2-alpha.branch1.2': GithubRelease(GHRelease({"tag_name": "0.0.2-alpha.branch1.2"})),
+    }, False),
+    ('0.0.2-alpha.branch2.1', {
+        '0.0.2-beta.branch1.2': GithubRelease(GHRelease({"tag_name": "0.0.2-beta.branch1.2"})),
+    }, False),
+    ('0.0.2-beta.branch2.1', {
+        '0.0.2-beta.branch1.2': GithubRelease(GHRelease({"tag_name": "0.0.2-beta.branch1.2"})),
+    }, False),
+    ('0.0.2-develop.1', {
+        '0.0.2-develop.1': GithubRelease(GHRelease({"tag_name": "0.0.2-develop.1"})),
+    }, False),
+    ('0.0.2-develop.1', {
+        '0.0.2-develop.1': GithubRelease(GHRelease({"tag_name": "0.0.2-develop.1"})),
+        '0.0.2-develop.2': GithubRelease(GHRelease({"tag_name": "0.0.2-develop.2"})),
+    }, True),
+    ('0.0.2-develop.50', {
+        '0.0.2-rc.1': GithubRelease(GHRelease({"tag_name": "0.0.2-rc.1"})),
+    }, True),
+]
 
 
 class TestUpdater:
@@ -269,3 +299,12 @@ class TestUpdater:
             else:
 
                 cancel.assert_called_once_with()
+
+    @pytest.mark.parametrize('local, remote, expected_result', dummy_branches)
+    def test_branch_skip(self, tmpdir, local, remote, expected_result):
+        p = Path(tmpdir.join('test.exe'))
+
+        upd = Updater(p.abspath(), local, '132nd-etcher', 'EASI', 'example.zip')
+
+        upd._available = remote
+        assert upd._build_candidates_list('alpha') is expected_result
