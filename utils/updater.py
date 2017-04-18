@@ -130,6 +130,7 @@ class Updater:
             asset_filename: str,
             pre_update_func: callable = None,
             cancel_update_func: callable = None,
+            auto_update: bool = False
     ):
         """
         :param executable_name: local file to update (usually self)
@@ -150,6 +151,7 @@ class Updater:
         self._asset_filename = asset_filename
         self._pre_update = pre_update_func
         self._cancel_update_func = cancel_update_func
+        self._auto_update = auto_update
 
         self._update_ready_to_install = False
 
@@ -268,6 +270,10 @@ class Updater:
             return False
 
     def _download_latest_release(self):
+
+        if not self._auto_update:
+            logger.debug('version check done')
+            return
 
         self._update_ready_to_install = False
 
