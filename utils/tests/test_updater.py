@@ -92,6 +92,20 @@ updater_version = [
     ('0.0.6', 'alpha', False),
 ]
 
+get_latest_remote = [
+    ('0.0.1', 'stable', ['0.0.2'], '0.0.2', True),
+    ('0.0.2', 'stable', ['0.0.2'], '0.0.2', False),
+    ('0.0.2', 'stable', ['0.0.2-dev.1'], None, False),
+    ('0.0.2', 'rc', ['0.0.2-dev.1', '0.0.2-rc.1'], '0.0.2-rc.1', False),
+    ('0.0.2', 'rc', ['0.0.2-dev.1', '0.0.2-rc.1', '0.0.3-rc.1'], '0.0.3-rc.1', True),
+    ('0.0.2', 'dev', ['0.0.2-dev.1'], '0.0.2-dev.1', False),
+    ('0.0.1', 'dev', ['0.0.2-dev.1'], '0.0.2-dev.1', True),
+    ('0.0.2', 'dev', ['0.0.2-dev.1', '0.0.3-alpha.caribou.1'], '0.0.2-dev.1', False),
+    ('0.0.2', 'beta', ['0.0.2-dev.1', '0.0.3-alpha.caribou.1'], '0.0.2-dev.1', False),
+    ('0.0.2', 'beta', ['0.0.2-dev.1', '0.0.3-alpha.caribou.1'], '0.0.2-dev.1', False),
+    ('0.0.2', 'alpha', ['0.0.2-dev.1', '0.0.3-alpha.caribou.1'], '0.0.3-alpha.caribou.1', True),
+]
+
 dummy_gh_release = [
     ({"tag_name": "0.0.1"}, '0.0.1', 'stable', None),
     ({"tag_name": "0.0.2-alpha.test.1"}, '0.0.2-alpha.test.1', 'alpha', 'test'),
@@ -162,6 +176,46 @@ dummy_branches = [
 
 
 class TestUpdater:
+    @pytest.mark.parametrize(
+        'current,'
+        'channel,'
+        'candidates,'
+        'expected_latest_remote,'
+        'expected_new_version_available',
+        get_latest_remote)
+    def test_get_latest_remote(self,
+                               current,
+                               channel,
+                               candidates,
+                               expected_latest_remote,
+                               expected_new_version_available,
+                               tmpdir):
+
+        p = Path(tmpdir.join('test.exe'))
+
+        upd = Updater(
+            executable_name=p.abspath(),
+            current_version=current,
+            gh_user='132nd-etcher',
+            gh_repo='EASI',
+            asset_filename='example.zip',
+        )
+
+        build_candidates = upd._build_candidates_list
+        def make_available_items():
+            for k in candidates:
+                upd._available[k] = GithubRelease(GHRelease({"tag_name": k}))
+            return build_candidates()
+
+        upd._version_check = make_available_items
+
+        upd.channel = channel
+
+        latest_remote, new_version_available = upd._get_latest_remote()
+        print(upd._candidates)
+        assert latest_remote == expected_latest_remote, latest_remote
+        assert new_version_available == expected_new_version_available
+
     def test_no_release(self, tmpdir):
         p = Path(tmpdir.join('test.exe'))
         upd = Updater(p.abspath(), '0.0.1', '132nd-etcher', 'no_release', 'example.zip')
@@ -403,3 +457,5 @@ class TestUpdater:
         upd._available = remote
 
         assert upd._build_candidates_list() is expected_result
+
+

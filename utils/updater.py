@@ -425,3 +425,40 @@ class Updater:
             task=self._version_check,
             _task_callback=self._version_check_follow_up,
             _err_callback=self._cancel_update_func)
+
+    def _get_latest_remote(self):
+        new_version_available = self._version_check()
+        return self.latest_remote.version_str if self.latest_remote else None, new_version_available
+
+    def get_latest_remote(self, callback: callable):
+
+        self.pool.queue_task(
+            task=self._get_latest_remote,
+            _task_callback=callback,
+            _err_callback=self._cancel_update_func)
+
+    def _install_latest_remote(self):
+
+        self.pool.queue_task(
+            task=self._process_candidates,
+            _err_callback=self._cancel_update_func,
+            _task_callback=self._post_check_func
+        )
+
+        self.pool.queue_task(
+            task=self._download_latest_release,
+            _err_callback=self._cancel_update_func
+        )
+
+        self.pool.queue_task(
+            task=self._install_update,
+            _err_callback=self._cancel_update_func
+        )
+
+    def install_latest_remote(self):
+
+        self.pool.queue_task(
+            task=self._install_latest_remote,
+            _err_callback=self._cancel_update_func)
+
+
