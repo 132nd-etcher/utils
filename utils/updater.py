@@ -166,8 +166,8 @@ class Updater:
 
         if releases:
             for rel in releases:
-                logger.debug('release found: {}'.format(rel.version))
                 self._available[rel.version] = GithubRelease(rel)
+                logger.debug('release found: {} ({})'.format(rel.version, self._available[rel.version].channel))
 
         else:
             logger.error('no release found for "{}/{}"'.format(self._gh_user, self._gh_repo))
