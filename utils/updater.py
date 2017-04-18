@@ -130,7 +130,8 @@ class Updater:
             asset_filename: str,
             pre_update_func: callable = None,
             cancel_update_func: callable = None,
-            auto_update: bool = False
+            auto_update: bool = False,
+            post_check_func: callable = None
     ):
         """
         :param executable_name: local file to update (usually self)
@@ -152,6 +153,7 @@ class Updater:
         self._pre_update = pre_update_func
         self._cancel_update_func = cancel_update_func
         self._auto_update = auto_update
+        self._post_check_func = post_check_func
 
         self._update_ready_to_install = False
 
@@ -372,7 +374,8 @@ class Updater:
 
             self.pool.queue_task(
                 task=self._process_candidates,
-                _err_callback=self._cancel_update_func
+                _err_callback=self._cancel_update_func,
+                _task_callback=self._post_check_func
             )
 
             self.pool.queue_task(
