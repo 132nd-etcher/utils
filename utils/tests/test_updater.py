@@ -3,61 +3,19 @@
 import pytest
 from httmock import HTTMock
 
-from utils import Path, Downloader, Progress
-from utils.updater import Version, Updater, GithubRelease, Updater2, AvailableReleases
+from utils import Path, Downloader
+from utils.updater import Version, GithubRelease, Updater, AvailableReleases
 from .test_gh import mock_gh_api, GHRelease
 
-valid_versions = {
-    '0.0.0+1': {
-        'channel': 'stable',
-        'branch': None,
-    },
-    '0.0.0-dev.13': {
-        'channel': 'dev',
-        'branch': None,
-    },
-    '0.0.0-alpha.test.15': {
-        'channel': 'alpha',
-        'branch': 'test',
-    },
-    '0.0.0-beta.test.15': {
-        'channel': 'beta',
-        'branch': 'test',
-    },
-    '0.0.0-rc.15': {
-        'channel': 'rc',
-        'branch': None,
-    },
-}
 
-valid_versions = [(
-    k,
-    valid_versions[k]['channel'],
-    valid_versions[k]['branch'],
-) for k in valid_versions]
+class DummyDownloader(Downloader):
+    download_return = True
+    downloaded = False
 
-ordered_versions = [
-    '0.0.0-alpha.test.15',
-    '0.0.0-beta.test.15',
-    '0.0.0-dev.13',
-    '0.0.0',
-    '0.0.1-alpha.test.15',
-    '0.0.1-alpha.test.16',
-    '0.0.1',
-]
-
-same_versions = [
-    ('0.0.0-alpha.test.15', '0.0.0-alpha.test.15+1'),
-    ('0.0.0-dev.1', '0.0.0-dev.1+some-text'),
-    ('0.0.1', '0.0.1+15-some-text'),
-]
-
-wrong_version_string = [
-    '0.0',
-    '0.0.0.0',
-    '0+0.0',
-    '0.0.1-alpha+test.15',
-]
+    def download(self):
+        self.progress_hooks[0]({'time': '00:00', 'downloaded': 100, 'total': 100})
+        DummyDownloader.downloaded = True
+        return DummyDownloader.download_return
 
 
 class DummyGHRel(GithubRelease):
@@ -71,24 +29,63 @@ def dummy_available(ar, list_of_versions):
 
 
 class TestVersion:
-    @pytest.mark.parametrize('version_str, channel, branch', valid_versions)
+    @pytest.mark.parametrize(
+        'version_str, channel, branch',
+        [
+            ('0.0.0+1', 'stable', None),
+            ('0.0.0-dev.13', 'dev', None),
+            ('0.0.0-alpha.test.15', 'alpha', 'test'),
+            ('0.0.0-beta.test.15', 'beta', 'test'),
+            ('0.0.0-rc.15', 'rc', None),
+        ]
+    )
     def test_init(self, version_str, channel, branch):
         version = Version(version_str)
         assert version.channel == channel
         assert version.branch == branch
         assert str(version) == version_str
 
-    @pytest.mark.parametrize('version', wrong_version_string)
+    @pytest.mark.parametrize(
+        'version',
+        [
+            '0.0',
+            '0.0.0.0',
+            '0+0.0',
+            '0.0.1-alpha+test.15',
+        ])
     def test_wrong_init(self, version):
         with pytest.raises(ValueError):
             Version(version)
 
-    def test_ordering(self):
+    @pytest.mark.parametrize(
+        'ordered_versions',
+        [
+            [
+                '0.0.0-alpha.test.15',
+                '0.0.0-beta.test.15',
+                '0.0.0-dev.13',
+                '0.0.0',
+                '0.0.1-alpha.test.15',
+                '0.0.1-alpha.test.16',
+                '0.0.1',
+            ]
+        ]
+    )
+    def test_version_ordering(self, ordered_versions):
         for i in range(len(ordered_versions) - 1):
             assert Version(ordered_versions[i]) < Version(ordered_versions[i + 1])
             assert Version(ordered_versions[i + 1]) > Version(ordered_versions[i])
-        for x in same_versions:
-            assert Version(x[0]) == Version(x[1])
+
+    @pytest.mark.parametrize(
+        'same_version',
+        [
+            ('0.0.0-alpha.test.15', '0.0.0-alpha.test.15+1'),
+            ('0.0.0-dev.1', '0.0.0-dev.1+some-text'),
+            ('0.0.1', '0.0.1+15-some-text'),
+        ]
+    )
+    def test_same_version(self, same_version):
+        assert Version(same_version[0]) == Version(same_version[1])
 
 
 class TestAvailableReleases:
@@ -96,8 +93,6 @@ class TestAvailableReleases:
         ar = AvailableReleases()
         ar.add(DummyGHRel('0.0.1'))
         assert len(ar) == 1, len(ar)
-
-
 
     @pytest.mark.parametrize('value', ['str', 1, True, None, False, 1.234])
     def test_set_item_wrong_value(self, value):
@@ -160,10 +155,10 @@ class TestAvailableReleases:
                  '0.0.3-alpha.tt.2',
                  '0.0.3-alpha.tt.3',
              ], 'alpha', 'tt', [
-                '0.0.3-alpha.tt.1',
-                '0.0.3-alpha.tt.2',
-                '0.0.3-alpha.tt.3',
-            ]),
+                 '0.0.3-alpha.tt.1',
+                 '0.0.3-alpha.tt.2',
+                 '0.0.3-alpha.tt.3',
+             ]),
         ]
     )
     def test_filter_by_branch(self, available, channel, branch, results):
@@ -203,7 +198,6 @@ class TestAvailableReleases:
         latest = ar.get_latest_release()
         assert not latest
 
-
     def test_filter_by_channel_empty(self):
         ar = AvailableReleases()
         assert not ar.filter_by_channel('stable')
@@ -215,11 +209,10 @@ class TestAvailableReleases:
             ar.filter_by_channel(channel)
 
 
-class TestUpdater2:
+class TestUpdater:
     @pytest.fixture(scope='function')
     def upd(self):
-        upd = Updater2(
-            executable_name='text.exe',
+        upd = Updater(
             current_version='0.0.1',
             gh_user='132nd-etcher',
             gh_repo='EASI',
@@ -227,216 +220,547 @@ class TestUpdater2:
         )
         yield upd
 
-    def test_gather_all_available_releases(self, upd: Updater2):
+    @pytest.fixture(scope='function', autouse=True)
+    def reset_downloader(self):
+        DummyDownloader.downloaded = False
+        DummyDownloader.download_return = True
+        yield
+
+    @pytest.fixture(scope='function', autouse=True)
+    def delete_temp_files(self):
+        Path('./update.bat').remove_p()
+        Path('./update.vbs').remove_p()
+        Path('./update').remove_p()
+        yield
+        Path('./update.bat').remove_p()
+        Path('./update.bat').remove_p()
+        Path('./update').remove_p()
+
+    def test_gather_all_available_releases(self, upd: Updater):
         assert upd._available == {}
 
         with HTTMock(mock_gh_api):
-            assert upd._gather_all_available_releases()
+            assert upd._gather_available_releases()
             assert len(upd._available) is 7
 
         upd._gh_repo = 'no_release'
 
         with HTTMock(mock_gh_api):
-            assert not upd._gather_all_available_releases()
+            assert not upd._gather_available_releases()
             assert len(upd._available) is 0
 
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
 
-updater_version = [
-    ('0.0.1', 'stable', True),
-    ('0.0.2', 'stable', False),
-    ('0.0.2', 'dev', True),
-    ('0.0.3', 'dev', False),
-    ('0.0.3', 'beta', True),
-    ('0.0.4', 'beta', False),
-    ('0.0.4', 'alpha', True),
-    ('0.0.6', 'alpha', False),
-]
-
-get_latest_remote = [
-    ('0.0.1', 'stable', ['0.0.2'], '0.0.2', True),
-    ('0.0.2', 'stable', ['0.0.2'], '0.0.2', False),
-    ('0.0.2', 'stable', ['0.0.2-dev.1'], None, False),
-    ('0.0.2', 'rc', ['0.0.2-dev.1', '0.0.2-rc.1'], '0.0.2-rc.1', False),
-    ('0.0.2', 'rc', ['0.0.2-dev.1', '0.0.2-rc.1', '0.0.3-rc.1'], '0.0.3-rc.1', True),
-    ('0.0.2', 'dev', ['0.0.2-dev.1'], '0.0.2-dev.1', False),
-    ('0.0.1', 'dev', ['0.0.2-dev.1'], '0.0.2-dev.1', True),
-    ('0.0.2', 'dev', ['0.0.2-dev.1', '0.0.3-alpha.caribou.1'], '0.0.2-dev.1', False),
-    ('0.0.2', 'beta', ['0.0.2-dev.1', '0.0.3-alpha.caribou.1'], '0.0.2-dev.1', False),
-    ('0.0.2', 'beta', ['0.0.2-dev.1', '0.0.3-alpha.caribou.1'], '0.0.2-dev.1', False),
-    ('0.0.2', 'alpha', ['0.0.2-dev.1', '0.0.3-alpha.caribou.1'], '0.0.3-alpha.caribou.1', True),
-]
-
-dummy_gh_release = [
-    ({"tag_name": "0.0.1"}, '0.0.1', 'stable', None),
-    ({"tag_name": "0.0.2-alpha.test.1"}, '0.0.2-alpha.test.1', 'alpha', 'test'),
-    ({"tag_name": "0.0.2-beta.test.1+532"}, '0.0.2-beta.test.1', 'beta', 'test'),
-    ({"tag_name": "0.0.3-rc.1"}, '0.0.3-rc.1', 'rc', None),
-]
-
-dummy_gh_assets = [
-    (
-        {"tag_name": "0.0.1",
-         "assets":
-             [
-                 {"browser_download_url": "the_url", "name": "example.zip"},
-             ]
-         },
-        'example.zip', 'the_url'
-    ),
-    (
-        {"tag_name": "0.0.1",
-         "assets":
-             [
-                 {"browser_download_url": "the_url1", "name": "EXAMPLE1"},
-                 {"browser_download_url": "the_url2", "name": "EXAMPLE2"},
-                 {"browser_download_url": "the_url3", "name": "EXAMPLE3"},
-                 {"browser_download_url": "the_url4", "name": "EXAMPLE4"},
-             ]
-         },
-        'example3', 'the_url3'
-    ),
-]
-
-dummy_candidates = {
-    '0.0.2': GithubRelease(GHRelease({"tag_name": "0.0.2"})),
-    '0.0.1': GithubRelease(GHRelease({"tag_name": "0.0.1"})),
-    '0.0.3': GithubRelease(GHRelease({"tag_name": "0.0.3"})),
-    '0.0.4': GithubRelease(GHRelease({"tag_name": "0.0.4"})),
-}
-
-dummy_branches = [
-    ('0.0.2-alpha.branch1.2', {
-        '0.0.2-alpha.branch1.2': GithubRelease(GHRelease({"tag_name": "0.0.2-alpha.branch1.2"})),
-        '0.0.2-alpha.branch2.3': GithubRelease(GHRelease({"tag_name": "0.0.2-alpha.branch2.3"})),
-        '0.0.2-alpha.branch3.3': GithubRelease(GHRelease({"tag_name": "0.0.2-alpha.branch3.3"})),
-    }, False),
-    ('0.0.2-alpha.branch1.1', {
-        '0.0.2-alpha.branch1.2': GithubRelease(GHRelease({"tag_name": "0.0.2-alpha.branch1.2"})),
-    }, True),
-    ('0.0.2-alpha.branch2.1', {
-        '0.0.2-alpha.branch1.2': GithubRelease(GHRelease({"tag_name": "0.0.2-alpha.branch1.2"})),
-    }, False),
-    ('0.0.2-alpha.branch2.1', {
-        '0.0.2-beta.branch1.2': GithubRelease(GHRelease({"tag_name": "0.0.2-beta.branch1.2"})),
-    }, False),
-    ('0.0.2-beta.branch2.1', {
-        '0.0.2-beta.branch1.2': GithubRelease(GHRelease({"tag_name": "0.0.2-beta.branch1.2"})),
-    }, False),
-    ('0.0.2-develop.1', {
-        '0.0.2-develop.1': GithubRelease(GHRelease({"tag_name": "0.0.2-develop.1"})),
-    }, False),
-    ('0.0.2-develop.1', {
-        '0.0.2-develop.1': GithubRelease(GHRelease({"tag_name": "0.0.2-develop.1"})),
-        '0.0.2-develop.2': GithubRelease(GHRelease({"tag_name": "0.0.2-develop.2"})),
-    }, True),
-    ('0.0.2-develop.50', {
-        '0.0.2-rc.1': GithubRelease(GHRelease({"tag_name": "0.0.2-rc.1"})),
-    }, True),
-]
-
-
-class TestUpdater:
     @pytest.mark.parametrize(
-        'current,'
-        'channel,'
-        'candidates,'
-        'expected_latest_remote,'
-        'expected_new_version_available',
-        get_latest_remote)
-    def test_get_latest_remote(self,
-                               current,
-                               channel,
-                               candidates,
-                               expected_latest_remote,
-                               expected_new_version_available,
-                               tmpdir):
+        'current, channel, expected_result',
+        [
+            ('0.0.1', 'stable', True),
+            ('0.0.2', 'stable', False),
+            ('0.0.2', 'dev', True),
+            ('0.0.3', 'dev', False),
+            ('0.0.3-beta.test.1', 'beta', True),
+            ('0.0.4-beta.test.1', 'beta', False),
+            ('0.0.4-alpha.test.1', 'alpha', True),
+            ('0.0.6-alpha.test.1', 'alpha', False),
+        ]
+    )
+    def test_check_version(self, current, channel, expected_result, mocker):
 
-        p = Path(tmpdir.join('test.exe'))
+        cancel = mocker.MagicMock()
+        installer = mocker.MagicMock(return_value=True)
 
         upd = Updater(
-            executable_name=p.abspath(),
             current_version=current,
             gh_user='132nd-etcher',
             gh_repo='EASI',
             asset_filename='example.zip',
         )
 
-        build_candidates = upd._build_candidates_list
+        upd._download_and_install_release = installer
 
-        def make_available_items():
-            for k in candidates:
-                upd._available[k] = GithubRelease(GHRelease({"tag_name": k}))
-            return build_candidates()
-
-        upd._version_check = make_available_items
-
-        upd.channel = channel
-
-        latest_remote, new_version_available = upd._get_latest_remote()
-        print(upd._candidates)
-        assert latest_remote == expected_latest_remote, latest_remote
-        assert new_version_available == expected_new_version_available
-
-    def test_no_release(self, tmpdir):
-        p = Path(tmpdir.join('test.exe'))
-        upd = Updater(p.abspath(), '0.0.1', '132nd-etcher', 'no_release', 'example.zip')
+        mocker.patch('utils.updater.Downloader', new=DummyDownloader)
 
         with HTTMock(mock_gh_api):
-            upd._version_check()
-            assert not upd.available
 
-    def test_pre_hook_is_false(self, tmpdir, mocker):
-        def pre_hook():
-            return False
+            if expected_result:
+                assert upd._find_and_install_latest_release(
+                    channel=channel,
+                    branch=Version(current).branch,
+                    cancel_func=cancel)
+                assert upd._available, upd._available
+            else:
+                assert not upd._find_and_install_latest_release(
+                    channel=channel,
+                    branch=Version(current).branch,
+                    cancel_func=cancel)
+                cancel.assert_called_once_with()
 
-        cancel_hook = mocker.MagicMock()
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
 
-        p = Path(tmpdir.join('test.exe'))
+    def test_no_asset(self, mocker):
+
+        cancel = mocker.MagicMock()
+
         upd = Updater(
-            p.abspath(),
-            '0.0.1',
-            '132nd-etcher',
-            'EASI',
-            'example.zip',
-            pre_update_func=pre_hook,
-            cancel_update_func=cancel_hook
+            current_version='0.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='no_asset',
+            asset_filename='example.zip',
         )
 
         with HTTMock(mock_gh_api):
-            upd._version_check()
-            assert upd.available
-            assert upd._process_candidates() is False
-            cancel_hook.assert_called_once_with()
+            assert not upd._find_and_install_latest_release(channel='stable', cancel_func=cancel)
+
+            cancel.assert_called_once_with()
+
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_wrong_asset_name(self, mocker):
+
+        cancel = mocker.MagicMock()
 
         upd = Updater(
-            executable_name=p.abspath(),
+            current_version='0.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='EASI',
+            asset_filename='i_dont_exist.zip',
+        )
+
+        with HTTMock(mock_gh_api):
+            assert not upd._find_and_install_latest_release(channel='stable', cancel_func=cancel)
+
+            cancel.assert_called_once_with()
+
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_download_fail(self, mocker):
+
+        cancel = mocker.MagicMock()
+
+        upd = Updater(
             current_version='0.0.1',
             gh_user='132nd-etcher',
             gh_repo='EASI',
             asset_filename='example.zip',
-            pre_update_func=pre_hook,
+        )
+
+        mocker.patch('utils.updater.Downloader', new=DummyDownloader)
+
+        DummyDownloader.download_return = False
+
+        with HTTMock(mock_gh_api):
+            assert not upd._find_and_install_latest_release(
+                channel='stable',
+                cancel_func=cancel)
+            assert upd._available, upd._available
+            assert DummyDownloader.downloaded is True
+            cancel.assert_called_once_with()
+
+        DummyDownloader.download_return = True
+
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_install_missing_file(self, mocker):
+
+        cancel = mocker.MagicMock()
+
+        upd = Updater(
+            current_version='0.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='EASI',
+            asset_filename='example.zip',
+        )
+
+        mocker.patch('utils.updater.Downloader', new=DummyDownloader)
+
+        with HTTMock(mock_gh_api):
+            assert not upd._find_and_install_latest_release(
+                channel='stable',
+                cancel_func=cancel)
+            assert upd._available, upd._available
+            assert DummyDownloader.downloaded is True
+            cancel.assert_called_once_with()
+
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_install(self, mocker, tmpdir):
+
+        cancel = mocker.MagicMock()
+
+        tmpdir.join('example.zip').write('dummy')
+
+        upd = Updater(
+            current_version='0.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='EASI',
+            asset_filename='example.zip',
+        )
+
+        mocker.patch('utils.updater.Downloader', new=DummyDownloader)
+        popen = mocker.patch('utils.updater.subprocess.Popen')
+        nice_exit = mocker.patch('utils.updater.nice_exit')
+
+        with HTTMock(mock_gh_api):
+            assert upd._find_and_install_latest_release(
+                channel='stable',
+                cancel_func=cancel,
+                executable_path=Path(str(tmpdir.join('example.zip')))
+            )
+
+        assert upd._available, upd._available
+        assert DummyDownloader.downloaded is True
+        cancel.assert_not_called()
+        popen.assert_called_with(['wscript.exe', 'update.vbs', 'update.bat'])
+        nice_exit.assert_called_with(0)
+
+        assert Path('./update.bat').exists()
+        assert Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_install_download_fail(self, mocker, tmpdir):
+
+        cancel = mocker.MagicMock()
+
+        tmpdir.join('example.zip').write('dummy')
+
+        upd = Updater(
+            current_version='0.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='EASI',
+            asset_filename='example.zip',
+        )
+
+        mocker.patch('utils.updater.Downloader', new=DummyDownloader)
+        popen = mocker.patch('utils.updater.subprocess.Popen')
+        nice_exit = mocker.patch('utils.updater.nice_exit')
+
+        DummyDownloader.download_return = False
+
+        with HTTMock(mock_gh_api):
+            assert not upd._find_and_install_latest_release(
+                channel='stable',
+                cancel_func=cancel,
+                executable_path=Path(str(tmpdir.join('example.zip')))
+            )
+
+        assert upd._available, upd._available
+        assert DummyDownloader.downloaded is True
+        cancel.assert_called_with()
+        popen.assert_not_called()
+        nice_exit.assert_not_called()
+
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_install_install_fail(self, mocker, tmpdir):
+
+        cancel = mocker.MagicMock()
+        install = mocker.MagicMock(return_value=False)
+
+        tmpdir.join('example.zip').write('dummy')
+
+        upd = Updater(
+            current_version='0.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='EASI',
+            asset_filename='example.zip',
+        )
+
+        upd._install_update = install
+
+        mocker.patch('utils.updater.Downloader', new=DummyDownloader)
+        popen = mocker.patch('utils.updater.subprocess.Popen')
+        nice_exit = mocker.patch('utils.updater.nice_exit')
+
+        exe_path = Path(str(tmpdir.join('example.zip')))
+
+        with HTTMock(mock_gh_api):
+            assert not upd._find_and_install_latest_release(
+                channel='stable',
+                cancel_func=cancel,
+                executable_path=exe_path
+            )
+
+        assert upd._available, upd._available
+        assert DummyDownloader.downloaded is True
+        cancel.assert_called_with()
+        popen.assert_not_called()
+        nice_exit.assert_not_called()
+        install.assert_called_with(exe_path)
+
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_install_no_new_version(self, mocker, tmpdir):
+
+        cancel = mocker.MagicMock()
+
+        tmpdir.join('example.zip').write('dummy')
+
+        upd = Updater(
+            current_version='999.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='EASI',
+            asset_filename='example.zip',
+        )
+
+        mocker.patch('utils.updater.Downloader', new=DummyDownloader)
+        popen = mocker.patch('utils.updater.subprocess.Popen')
+        nice_exit = mocker.patch('utils.updater.nice_exit')
+
+        with HTTMock(mock_gh_api):
+            assert not upd._find_and_install_latest_release(
+                channel='stable',
+                cancel_func=cancel,
+                executable_path=Path(str(tmpdir.join('example.zip')))
+            )
+
+        assert upd._available, upd._available
+        assert DummyDownloader.downloaded is False
+        cancel.assert_called_with()
+        popen.assert_not_called()
+        nice_exit.assert_not_called()
+
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_install_exe_path_as_string(self, mocker, tmpdir):
+
+        cancel = mocker.MagicMock()
+
+        tmpdir.join('example.zip').write('dummy')
+
+        upd = Updater(
+            current_version='0.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='EASI',
+            asset_filename='example.zip',
+        )
+
+        mocker.patch('utils.updater.Downloader', new=DummyDownloader)
+        popen = mocker.patch('utils.updater.subprocess.Popen')
+        nice_exit = mocker.patch('utils.updater.nice_exit')
+
+        with HTTMock(mock_gh_api):
+            assert upd._find_and_install_latest_release(
+                channel='stable',
+                cancel_func=cancel,
+                executable_path=str(tmpdir.join('example.zip'))
+            )
+
+        assert upd._available, upd._available
+        assert DummyDownloader.downloaded is True
+        cancel.assert_not_called()
+        popen.assert_called_with(['wscript.exe', 'update.vbs', 'update.bat'])
+        nice_exit.assert_called_with(0)
+
+        assert Path('./update.bat').exists()
+        assert Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_install_no_candidates(self, mocker, tmpdir):
+
+        cancel = mocker.MagicMock()
+
+        tmpdir.join('example.zip').write('dummy')
+
+        upd = Updater(
+            current_version='1.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='no_release',
+            asset_filename='example.zip',
+        )
+
+        mocker.patch('utils.updater.Downloader', new=DummyDownloader)
+        popen = mocker.patch('utils.updater.subprocess.Popen')
+        nice_exit = mocker.patch('utils.updater.nice_exit')
+
+        with HTTMock(mock_gh_api):
+            assert not upd._find_and_install_latest_release(
+                channel='stable',
+                cancel_func=cancel,
+                executable_path=str(tmpdir.join('example.zip'))
+            )
+
+        assert not upd._available, upd._available
+        assert DummyDownloader.downloaded is False
+        cancel.assert_called_once_with()
+        popen.assert_not_called()
+        nice_exit.assert_not_called()
+
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_install_no_asset(self, mocker, tmpdir):
+
+        cancel = mocker.MagicMock()
+
+        tmpdir.join('example.zip').write('dummy')
+
+        upd = Updater(
+            current_version='0.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='no_asset',
+            asset_filename='example.zip',
+        )
+
+        mocker.patch('utils.updater.Downloader', new=DummyDownloader)
+        popen = mocker.patch('utils.updater.subprocess.Popen')
+        nice_exit = mocker.patch('utils.updater.nice_exit')
+
+        with HTTMock(mock_gh_api):
+            assert not upd._find_and_install_latest_release(
+                channel='stable',
+                cancel_func=cancel,
+                executable_path=str(tmpdir.join('example.zip'))
+            )
+
+        assert upd._available, upd._available
+        assert DummyDownloader.downloaded is False
+        cancel.assert_called_once_with()
+        popen.assert_not_called()
+        nice_exit.assert_not_called()
+
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_install_no_cancel_func(self, mocker, tmpdir):
+
+        cancel = mocker.MagicMock()
+
+        tmpdir.join('example.zip').write('dummy')
+
+        upd = Updater(
+            current_version='0.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='no_asset',
+            asset_filename='example.zip',
+        )
+
+        mocker.patch('utils.updater.Downloader', new=DummyDownloader)
+        popen = mocker.patch('utils.updater.subprocess.Popen')
+        nice_exit = mocker.patch('utils.updater.nice_exit')
+
+        with HTTMock(mock_gh_api):
+            assert not upd._find_and_install_latest_release(
+                channel='stable',
+                executable_path=str(tmpdir.join('example.zip'))
+            )
+
+        assert upd._available, upd._available
+        assert DummyDownloader.downloaded is False
+        cancel.assert_not_called()
+        popen.assert_not_called()
+        nice_exit.assert_not_called()
+
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_get_latest_release_from_gh(self):
+
+        upd = Updater(
+            current_version='0.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='EASI',
+            asset_filename='example.zip',
         )
 
         with HTTMock(mock_gh_api):
-            upd._version_check()
-            assert upd.available
-            assert upd._process_candidates() is False
+            latest = upd._get_latest_release('stable')
 
-    # @pytest.mark.parametrize('candidates', dummy_candidates)
-    def test_process_candidates(self, tmpdir):
-        p = Path(tmpdir.join('test.exe'))
+            assert latest.version.version_str == '0.0.2', latest.version.version_str
 
-        upd = Updater(p.abspath(), '0.0.1', '132nd-etcher', 'EASI', 'example.zip')
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
 
-        upd._candidates = dummy_candidates
-        assert upd._process_candidates() is True
+    @pytest.mark.parametrize(
+        'available, channel, branch, result',
+        [
+            (
+                    {'0.0.1', '0.0.2', '0.0.3-dev.1'},
+                    'stable', None, '0.0.2',
+            ),
+            (
+                    {'0.0.1', '0.0.2', '0.0.3-dev.1'},
+                    'dev', None, '0.0.3-dev.1',
+            ),
+            (
+                    {'0.0.1', '0.0.2', '0.0.3-dev.1', '0.0.4-beta.test.1'},
+                    'dev', None, '0.0.3-dev.1',
+            ),
+            (
+                    {'0.0.4-beta.test.1', '0.0.4-alpha.test.1'},
+                    'beta', 'test', '0.0.4-beta.test.1',
+            ),
+            (
+                    {'0.0.4-beta.test.1', '0.0.4-alpha.test.1'},
+                    'alpha', 'test', '0.0.4-beta.test.1',
+            ),
+            (
+                    {'0.0.4-beta.test.1', '0.0.5-alpha.test.1'},
+                    'alpha', 'test', '0.0.5-alpha.test.1',
+            ),
+            (
+                    {'0.0.4-beta.test.1', '0.0.5-beta.other.1'},
+                    'beta', 'test', '0.0.4-beta.test.1',
+            ),
+        ]
+    )
+    def test_get_latest_release(self, available, channel, branch, result, mocker):
 
-        upd._current = Version('0.0.5')
-        assert upd._process_candidates() is False
+        gather_available = mocker.MagicMock()
 
-    @pytest.mark.parametrize('gh_release', dummy_gh_release)
+        upd = Updater(
+            current_version='9.9.9',
+            gh_user='132nd-etcher',
+            gh_repo='EASI',
+            asset_filename='example.zip',
+        )
+
+        upd._gather_available_releases = gather_available
+
+        dummy_available(upd._available, available)
+
+        with HTTMock(mock_gh_api):
+            latest = upd._get_latest_release(channel, branch)
+
+            assert latest.version.version_str == result, latest.version.version_str
+
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+
+class TestGHRlease:
+    @pytest.mark.parametrize(
+        'gh_release',
+        [
+            ({"tag_name": "0.0.1"}, '0.0.1', 'stable', None),
+            ({"tag_name": "0.0.2-alpha.test.1"}, '0.0.2-alpha.test.1', 'alpha', 'test'),
+            ({"tag_name": "0.0.2-beta.test.1+532"}, '0.0.2-beta.test.1', 'beta', 'test'),
+            ({"tag_name": "0.0.3-rc.1"}, '0.0.3-rc.1', 'rc', None),
+        ]
+    )
     def test_gh_release(self, gh_release):
-
         json, version_str, channel, branch = gh_release
 
         gh_rel = GithubRelease(GHRelease(json))
@@ -444,177 +768,34 @@ class TestUpdater:
         assert gh_rel.channel == channel
         assert gh_rel.branch == branch
 
-    @pytest.mark.parametrize('gh_assets', dummy_gh_assets)
+    @pytest.mark.parametrize(
+        'gh_assets',
+        [
+            (
+                    {"tag_name": "0.0.1",
+                     "assets":
+                         [
+                             {"browser_download_url": "the_url", "name": "example.zip"},
+                         ]
+                     },
+                    'example.zip', 'the_url'
+            ),
+            (
+                    {"tag_name": "0.0.1",
+                     "assets":
+                         [
+                             {"browser_download_url": "the_url1", "name": "EXAMPLE1"},
+                             {"browser_download_url": "the_url2", "name": "EXAMPLE2"},
+                             {"browser_download_url": "the_url3", "name": "EXAMPLE3"},
+                             {"browser_download_url": "the_url4", "name": "EXAMPLE4"},
+                         ]
+                     },
+                    'example3', 'the_url3'
+            ),
+        ]
+    )
     def test_gh_release_assets(self, gh_assets):
         json, asset_name, dld_url = gh_assets
         gh_rel = GithubRelease(GHRelease(json))
         assert gh_rel.get_asset_download_url('some_asset') is None
         assert gh_rel.get_asset_download_url(asset_name) == dld_url
-
-    @pytest.mark.parametrize('channel', ['Alpha', '_beta', 'STABLE', 'random', 1, True, None, float(3)])
-    def test_wrong_channel(self, channel, tmpdir):
-        p = Path(tmpdir.join('test.exe'))
-        upd = Updater(p.abspath(), '0.0.1', '132nd-etcher', 'EASI', 'example.zip')
-        with pytest.raises(ValueError):
-            upd.channel = channel
-
-    @pytest.mark.parametrize('wrong_param', ['Alpha', '_beta', 'STABLE', 'random', 1, True, None, float(3)])
-    def test_wrong_latest_remote(self, tmpdir, wrong_param):
-        p = Path(tmpdir.join('test.exe'))
-        upd = Updater(p.abspath(), '0.0.1', '132nd-etcher', 'EASI', 'example.zip')
-        with pytest.raises(TypeError):
-            upd.latest_remote = wrong_param
-
-    @pytest.mark.parametrize('wrong_param', ['Alpha', '_beta', 'STABLE', 'random', 1, True, None, float(3)])
-    def test_wrong_latest_candidate(self, tmpdir, wrong_param):
-        p = Path(tmpdir.join('test.exe'))
-        upd = Updater(p.abspath(), '0.0.1', '132nd-etcher', 'EASI', 'example.zip')
-        with pytest.raises(TypeError):
-            upd.latest_candidate = wrong_param
-
-    @pytest.mark.parametrize('current, channel, expected_result', updater_version)
-    def test_check_version_without_hooks(self, current, channel, expected_result, tmpdir):
-
-        p = Path(tmpdir.join('test.exe'))
-
-        upd = Updater(
-            executable_name=p.abspath(),
-            current_version=current,
-            gh_user='132nd-etcher',
-            gh_repo='EASI',
-            asset_filename='example.zip')
-
-        with HTTMock(mock_gh_api):
-            upd.channel = channel
-            assert upd._version_check() is expected_result
-            upd._process_candidates()
-
-    @pytest.mark.parametrize('current, channel, expected_result', updater_version)
-    def test_check_version(self, current, channel, expected_result, tmpdir, mocker):
-
-        pre = mocker.MagicMock()
-        cancel = mocker.MagicMock()
-
-        p = Path(tmpdir.join('test.exe'))
-
-        upd = Updater(
-            executable_name=p.abspath(),
-            current_version=current,
-            gh_user='132nd-etcher',
-            gh_repo='EASI',
-            asset_filename='example.zip',
-            pre_update_func=pre,
-            cancel_update_func=cancel,
-            auto_update=True
-        )
-
-        with HTTMock(mock_gh_api):
-
-            upd.channel = channel
-
-            assert upd._version_check() is expected_result
-
-            upd._process_candidates()
-
-            if expected_result is True:
-
-                pre.assert_called_once_with()
-                assert upd._candidates
-                assert upd.latest_candidate
-
-                assert isinstance(upd.latest_candidate, GithubRelease)
-
-                class DummyDownloader(Downloader):
-
-                    download_return = True
-
-                    def download(self):
-                        self.progress_hooks[0]({'time': '00:00', 'downloaded': 100, 'total': 100})
-                        return DummyDownloader.download_return
-
-                mocker.patch('utils.updater.Downloader', new=DummyDownloader)
-
-                upd._download_latest_release()
-                assert upd._update_ready_to_install
-                Progress.done()
-
-                DummyDownloader.download_return = False
-
-                upd._download_latest_release()
-                cancel.assert_called_once_with()
-                assert not upd._update_ready_to_install
-                Progress.done()
-
-            else:
-
-                cancel.assert_called_once_with()
-
-    @pytest.mark.parametrize('current, channel, expected_result', updater_version)
-    def test_check_version_no_auto(self, current, channel, expected_result, tmpdir, mocker):
-
-        pre = mocker.MagicMock()
-        cancel = mocker.MagicMock()
-
-        p = Path(tmpdir.join('test.exe'))
-
-        upd = Updater(
-            executable_name=p.abspath(),
-            current_version=current,
-            gh_user='132nd-etcher',
-            gh_repo='EASI',
-            asset_filename='example.zip',
-            pre_update_func=pre,
-            cancel_update_func=cancel,
-            auto_update=False
-        )
-
-        with HTTMock(mock_gh_api):
-
-            upd.channel = channel
-
-            assert upd._version_check() is expected_result
-
-            upd._process_candidates()
-
-            if expected_result is True:
-
-                pre.assert_called_once_with()
-                assert upd._candidates
-                assert upd.latest_candidate
-
-                assert isinstance(upd.latest_candidate, GithubRelease)
-
-                class DummyDownloader(Downloader):
-
-                    download_return = True
-
-                    def download(self):
-                        self.progress_hooks[0]({'time': '00:00', 'downloaded': 100, 'total': 100})
-                        return DummyDownloader.download_return
-
-                mocker.patch('utils.updater.Downloader', new=DummyDownloader)
-
-                upd._download_latest_release()
-                assert not upd._update_ready_to_install
-                Progress.done()
-
-                DummyDownloader.download_return = False
-
-                upd._download_latest_release()
-                cancel.assert_not_called()
-                assert not upd._update_ready_to_install
-                Progress.done()
-
-            else:
-
-                cancel.assert_called_once_with()
-
-    @pytest.mark.parametrize('local, remote, expected_result', dummy_branches)
-    def test_branch_skip(self, tmpdir, local, remote, expected_result):
-        p = Path(tmpdir.join('test.exe'))
-
-        upd = Updater(p.abspath(), local, '132nd-etcher', 'EASI', 'example.zip', channel='alpha')
-
-        upd._available = remote
-
-        assert upd._build_candidates_list() is expected_result
