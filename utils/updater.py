@@ -242,11 +242,11 @@ class Updater:
                 ))
                 continue
 
-            logger.debug('comparing current with remote: "{}" vs "{}"'.format(self._current, version))
-
             if self.latest_remote is None or self.latest_remote < version:
                 self.latest_remote = version
+                logger.debug('latest remote: "{}"'.format(self.latest_remote))
 
+            logger.debug('comparing current with remote: "{}" vs "{}"'.format(self._current, version))
             if version > self._current:
                 logger.debug('this version is newer: {}'.format(version))
                 self._candidates[version.version_str] = release
