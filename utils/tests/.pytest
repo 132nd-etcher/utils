@@ -1,2 +1,2 @@
 [pytest]
-addopts = --cov=utils --cov-config ./utils/tests/.coveragerc --cov-report xml --cov-report html --durations=10
+addopts = -s --cov=utils --cov-config ./utils/tests/.coveragerc --cov-report xml --cov-report html --durations=10
