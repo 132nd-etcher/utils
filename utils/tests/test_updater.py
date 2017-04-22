@@ -4,7 +4,7 @@ import pytest
 from httmock import HTTMock
 
 from utils import Path, Downloader, Progress
-from utils.updater import Version, Updater, GithubRelease
+from utils.updater import Version, Updater, GithubRelease, Updater2, AvailableReleases
 from .test_gh import mock_gh_api, GHRelease
 
 valid_versions = {
@@ -60,6 +60,16 @@ wrong_version_string = [
 ]
 
 
+class DummyGHRel(GithubRelease):
+    def __init__(self, version_str):
+        GithubRelease.__init__(self, GHRelease({'tag_name': '{}'.format(version_str)}))
+
+
+def dummy_available(ar, list_of_versions):
+    for v in list_of_versions:
+        ar.add(DummyGHRel(v))
+
+
 class TestVersion:
     @pytest.mark.parametrize('version_str, channel, branch', valid_versions)
     def test_init(self, version_str, channel, branch):
@@ -79,6 +89,156 @@ class TestVersion:
             assert Version(ordered_versions[i + 1]) > Version(ordered_versions[i])
         for x in same_versions:
             assert Version(x[0]) == Version(x[1])
+
+
+class TestAvailableReleases:
+    def test_set_item(self):
+        ar = AvailableReleases()
+        ar.add(DummyGHRel('0.0.1'))
+        assert len(ar) == 1, len(ar)
+
+
+
+    @pytest.mark.parametrize('value', ['str', 1, True, None, False, 1.234])
+    def test_set_item_wrong_value(self, value):
+        ar = AvailableReleases()
+        with pytest.raises(TypeError):
+            ar.add(value)
+        assert len(ar) == 0
+
+    @pytest.mark.parametrize(
+        'available, channel, results',
+        [
+            (['0.0.1'], 'stable', ['0.0.1']),
+            (['0.0.1'], 'dev', ['0.0.1']),
+            (['0.0.1', '0.0.2', '0.0.3'], 'stable', ['0.0.1', '0.0.2', '0.0.3']),
+            ([
+                 '0.0.1-dev.1', '0.0.1'
+             ], 'stable', ['0.0.1']),
+            ([
+                 '0.0.3-dev.1', '0.0.2-rc.1', '0.0.1', '0.0.4-beta.t.1', '0.0.5-alpha.t.1'
+             ], 'stable', ['0.0.1']),
+            ([
+                 '0.0.3-dev.1', '0.0.2-rc.1', '0.0.1', '0.0.4-beta.t.1', '0.0.5-alpha.t.1'
+             ], 'rc', ['0.0.1', '0.0.2-rc.1']),
+            ([
+                 '0.0.3-dev.1', '0.0.2-rc.1', '0.0.1', '0.0.4-beta.t.1', '0.0.5-alpha.t.1'
+             ], 'dev', ['0.0.1', '0.0.2-rc.1', '0.0.3-dev.1']),
+            ([
+                 '0.0.3-dev.1', '0.0.2-rc.1', '0.0.1', '0.0.4-beta.t.1', '0.0.5-alpha.t.1'
+             ], 'beta', ['0.0.1', '0.0.2-rc.1', '0.0.3-dev.1', '0.0.4-beta.t.1']),
+            ([
+                 '0.0.3-dev.1', '0.0.2-rc.1', '0.0.1', '0.0.4-beta.t.1', '0.0.5-alpha.t.1'
+             ], 'alpha', ['0.0.1', '0.0.2-rc.1', '0.0.3-dev.1', '0.0.4-beta.t.1', '0.0.5-alpha.t.1']),
+            (['0.0.2-alpha.t.1', '0.0.2-alpha.tt.1'], 'beta', None),
+        ]
+    )
+    def test_filter_by_channels(self, available, channel, results):
+        ar = AvailableReleases()
+        dummy_available(ar, available)
+        ar = ar.filter_by_channel(channel)
+        if results:
+            assert ar
+            assert len(ar) == len(results)
+            assert all([k in ar.keys() for k in results])
+        else:
+            assert not ar
+            assert len(ar) == 0
+
+    @pytest.mark.parametrize(
+        'available, channel, branch, results',
+        [
+            (['0.0.1'], 'stable', '', ['0.0.1']),
+            (['0.0.2-alpha.t.1'], 'stable', '', None),
+            (['0.0.2-alpha.t.1'], 'alpha', 'tt', None),
+            (['0.0.2-alpha.t.1'], 'alpha', 't', ['0.0.2-alpha.t.1']),
+            (['0.0.2-alpha.t.1', '0.0.3-alpha.tt.1'], 'alpha', 't', ['0.0.2-alpha.t.1']),
+            (['0.0.2-alpha.t.1', '0.0.3-alpha.tt.1'], 'alpha', 'tt', ['0.0.3-alpha.tt.1']),
+            ([
+                 '0.0.2-alpha.t.1',
+                 '0.0.3-alpha.tt.1',
+                 '0.0.3-alpha.tt.2',
+                 '0.0.3-alpha.tt.3',
+             ], 'alpha', 'tt', [
+                '0.0.3-alpha.tt.1',
+                '0.0.3-alpha.tt.2',
+                '0.0.3-alpha.tt.3',
+            ]),
+        ]
+    )
+    def test_filter_by_branch(self, available, channel, branch, results):
+        ar = AvailableReleases()
+        ar2 = AvailableReleases()
+        dummy_available(ar, available)
+        dummy_available(ar2, available)
+        ar = ar.filter_by_branch(channel, branch)
+        if channel in ['alpha', 'beta']:
+            ar2 = ar2.filter_by_branch(channel, Version('0.0.1-{}.{}.1'.format(channel, branch)))
+            assert ar.keys() == ar2.keys()
+        if results:
+            assert ar
+            assert len(ar) == len(results), ar
+            assert all([k in ar.keys() for k in results])
+        else:
+            assert not ar
+            assert len(ar) == 0
+
+    @pytest.mark.parametrize(
+        'available, result',
+        [
+            (['0.0.1'], '0.0.1'),
+            (['0.0.1', '0.0.2', '0.0.4'], '0.0.4'),
+            (['0.0.1', '0.0.2', '0.0.4-alpha.t.1'], '0.0.4-alpha.t.1'),
+        ]
+    )
+    def test_get_latest(self, available, result):
+        ar = AvailableReleases()
+        dummy_available(ar, available)
+        latest = ar.get_latest_release()
+        if result:
+            assert latest.version == Version(result), latest
+
+    def test_get_latest_empty(self):
+        ar = AvailableReleases()
+        latest = ar.get_latest_release()
+        assert not latest
+
+
+    def test_filter_by_channel_empty(self):
+        ar = AvailableReleases()
+        assert not ar.filter_by_channel('stable')
+
+    @pytest.mark.parametrize('channel', ['some', 'string', 1, True, None])
+    def test_filter_by_channel_wrong_channel(self, channel):
+        ar = AvailableReleases()
+        with pytest.raises(ValueError):
+            ar.filter_by_channel(channel)
+
+
+class TestUpdater2:
+    @pytest.fixture(scope='function')
+    def upd(self):
+        upd = Updater2(
+            executable_name='text.exe',
+            current_version='0.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='EASI',
+            asset_filename='example.zip',
+        )
+        yield upd
+
+    def test_gather_all_available_releases(self, upd: Updater2):
+        assert upd._available == {}
+
+        with HTTMock(mock_gh_api):
+            assert upd._gather_all_available_releases()
+            assert len(upd._available) is 7
+
+        upd._gh_repo = 'no_release'
+
+        with HTTMock(mock_gh_api):
+            assert not upd._gather_all_available_releases()
+            assert len(upd._available) is 0
 
 
 updater_version = [
@@ -202,6 +362,7 @@ class TestUpdater:
         )
 
         build_candidates = upd._build_candidates_list
+
         def make_available_items():
             for k in candidates:
                 upd._available[k] = GithubRelease(GHRelease({"tag_name": k}))
@@ -457,5 +618,3 @@ class TestUpdater:
         upd._available = remote
 
         assert upd._build_candidates_list() is expected_result
-
-

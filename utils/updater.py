@@ -1,18 +1,20 @@
 # coding=utf-8
 
 import io
-import subprocess
 import re
+import subprocess
+from collections import UserDict
 
 import humanize
 import semver
 
 from utils.custom_logging import make_logger
+from utils.custom_path import Path
 from utils.downloader import Downloader
 from utils.gh import GHRelease, GHSession
+from utils.monkey import nice_exit
 from utils.progress import Progress
 from utils.threadpool import ThreadPool
-from utils.monkey import nice_exit
 
 logger = make_logger(__name__)
 
@@ -108,6 +110,261 @@ class GithubRelease:
     @property
     def branch(self) -> str or None:
         return self._version.branch
+
+
+class AvailableReleases(UserDict):
+    channel_weights = dict(
+        alpha=0,
+        beta=1,
+        dev=2,
+        rc=3,
+        stable=4
+    )
+
+    valid_channels = ['alpha', 'beta', 'dev', 'rc', 'stable']
+
+    def add(self, release: GithubRelease):
+        if not isinstance(release, GithubRelease):
+            raise TypeError('expected GithubRelease, got: {}'.format(type(release)))
+        self.data[release.version.version_str] = release
+
+    def __setitem__(self, *_):
+        raise NotImplementedError
+
+    def filter_by_channel(self, channel: str) -> 'AvailableReleases' or None:
+
+        if channel not in self.valid_channels:
+            raise ValueError(channel)
+
+        if len(self) == 0:
+            logger.error('no available release')
+            return False
+
+        ret = AvailableReleases()
+
+        min_weight = self.channel_weights[channel]
+
+        for version_str, release in self.items():
+
+            release_version = Version(version_str)
+
+            release_weight = self.channel_weights[release_version.channel]
+
+            if release_weight < min_weight:
+                logger.debug('skipping release on channel: {}'.format(release_version.channel))
+                continue
+
+            ret.add(release)
+
+        return ret
+
+    def filter_by_branch(self, channel: str, branch: str or Version) -> 'AvailableReleases' or None:
+
+        channel_filtered = self.filter_by_channel(channel)
+
+        if not channel_filtered:
+            logger.error('no available release on channel: {}'.format(channel))
+            return channel_filtered
+
+        if isinstance(branch, Version):
+            branch = branch.branch
+
+        ret = AvailableReleases()
+
+        for release in channel_filtered.values():
+
+            if release.branch and not branch == release.branch:
+                logger.debug('skipping different branch; own: {} remote: {}'.format(
+                    branch, release.branch
+                ))
+                continue
+
+            ret.add(release)
+
+        return ret
+
+    def get_latest_release(self) -> GithubRelease or None:
+
+        if len(self) == 0:
+            logger.error('no release available')
+            return
+
+        latest = Version('0.0.0')
+
+        for rel in self.values():
+            assert isinstance(rel, GithubRelease)
+            if rel.version > latest:
+                latest = rel.version
+
+        return self.data[latest.version_str]
+
+    @staticmethod
+    def _download_asset_from_release(gh_release: GithubRelease, asset_filename) -> bool or None:
+
+        def _progress_hook(data):
+            label = 'Time left: {} ({}/{})'.format(
+                data['time'],
+                humanize.naturalsize(data['downloaded']),
+                humanize.naturalsize(data['total'])
+            )
+            Progress.set_label(label)
+            Progress.set_value(data['downloaded'] / data['total'] * 100)
+
+        for asset in gh_release.assets:
+
+            logger.debug('checking asset: {}'.format(asset.name))
+
+            if asset.name.lower() == asset_filename.lower():
+
+                Progress.start(
+                    title='Downloading latest version',
+                    length=100,
+                    label='')
+                d = Downloader(
+                    url=asset.browser_download_url,
+                    filename='./update',
+                    progress_hooks=[_progress_hook],
+                )
+
+                if d.download():
+                    return True
+
+                else:
+                    logger.error('download failed')
+
+    @staticmethod
+    def _install_update(executable: str or Path) -> bool or None:
+
+        if isinstance(executable, str):
+            executable = Path(executable)
+
+        if not executable.exists():
+            raise FileNotFoundError(executable.abspath())
+
+        logger.debug('installing update')
+        # noinspection SpellCheckingInspection
+        bat_liiiiiiiiiiiines = [  # I'm deeply sorry ...
+            '@echo off',
+            'echo Updating to latest version...',
+            'ping 127.0.0.1 - n 5 - w 1000 > NUL',
+            'move /Y "update" "{}" > NUL'.format(executable.basename()),
+            'echo restarting...',
+            'start "" "{}"'.format(executable.basename()),
+            'DEL update.vbs',
+            'DEL "%~f0"',
+        ]
+        logger.debug('write bat file')
+        with io.open('update.bat', 'w', encoding='utf-8') as bat:
+            bat.write('\n'.join(bat_liiiiiiiiiiiines))
+
+        logger.debug('write vbs script')
+        with io.open('update.vbs', 'w', encoding='utf-8') as vbs:
+            # http://www.howtogeek.com/131597/can-i-run-a-windows-batch-file-without-a-visible-command-prompt/
+            vbs.write('CreateObject("Wscript.Shell").Run """" '
+                      '& WScript.Arguments(0) & """", 0, False')
+        logger.debug('starting update batch file')
+        args = ['wscript.exe', 'update.vbs', 'update.bat']
+        subprocess.Popen(args)
+        # noinspection PyProtectedMember
+        # os._exit(0)
+        nice_exit(0)
+
+
+class Updater2:
+    channel_weights = dict(
+        alpha=0,
+        beta=1,
+        dev=2,
+        rc=3,
+        stable=4
+    )
+
+    valid_channels = ['alpha', 'beta', 'dev', 'rc', 'stable']
+
+    def __init__(
+            self,
+            executable_name: str,
+            current_version: str,
+            gh_user: str,
+            gh_repo: str,
+            asset_filename: str,
+    ):
+        """
+        :param executable_name: local file to update (usually self)
+        :param current_version: current running version
+        :param gh_user: Github user name
+        :param gh_repo: Github repo name
+        :param asset_filename: name of the asset in the Github release, usually identical to executable_name
+        """
+        self._executable_name = executable_name
+        self._current = Version(current_version)
+        self._gh_user = gh_user
+        self._gh_repo = gh_repo
+        self._channel = None
+        self._available = {}
+        self._candidates = {}
+        self._asset_filename = asset_filename
+        self._update_ready_to_install = False
+        self.pool = ThreadPool(_num_threads=1, _basename='updater', _daemon=True)
+
+    def _gather_all_available_releases(self):
+
+        self._available = {}
+
+        gh = GHSession()
+
+        logger.debug('querying GH API for available releases')
+        releases = gh.get_all_releases(self._gh_user, self._gh_repo)
+
+        if releases:
+            logger.debug('found {} available releases on Github'.format(len(releases)))
+            for rel in releases:
+                self._available[rel.version] = GithubRelease(rel)
+                logger.debug('release found: {} ({})'.format(rel.version, self._available[rel.version].channel))
+
+            return len(self._available) > 0
+
+        else:
+            logger.error('no release found for "{}/{}"'.format(self._gh_user, self._gh_repo))
+
+    def _filter_releases_by_channel(self, channel: str = 'stable', against: Version = None):
+
+        if channel not in self.valid_channels:
+            raise ValueError(channel)
+
+        filtered_releases = {}
+
+        if against is None:
+            against = self._current
+
+        min_weight = self.channel_weights[channel]
+
+        if len(self._available) == 0:
+            logger.error('no available release')
+            return False
+
+        for version_str, release in self._available.items():
+
+            release_version = Version(version_str)
+
+            release_weight = self.channel_weights[release_version.channel]
+
+            if release_weight < min_weight:
+                logger.debug('skipping release on channel: {}'.format(release_version.channel))
+                continue
+
+            if against.branch is not None and not against.branch == release_version.branch:
+                logger.debug('skipping different branch; own: {} remote: {}'.format(
+                    against.branch, release_version.branch
+                ))
+                continue
+
+            filtered_releases[version_str] = release
+
+        return filtered_releases
+
+    def filter_releases_by_versions(self, ):
+        pass
 
 
 class Updater:
@@ -460,5 +717,3 @@ class Updater:
         self.pool.queue_task(
             task=self._install_latest_remote,
             _err_callback=self._cancel_update_func)
-
-
