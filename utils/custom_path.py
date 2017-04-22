@@ -184,6 +184,20 @@ class Path(path.Path):
     def joinpath(self, first, *others):
         return Path(super(Path, self).joinpath(first, *others))
 
+    def must_exist(self, exc):
+        if not self.exists():
+            raise exc(self.abspath())
+
+    def must_be_a_file(self, exc):
+        self.must_exist(exc)
+        if not self.isfile():
+            raise exc(self.abspath())
+
+    def must_be_a_dir(self, exc):
+        self.must_exist(exc)
+        if not self.isdir():
+            raise exc(self.abspath())
+
 
 def create_temp_file(
         *,

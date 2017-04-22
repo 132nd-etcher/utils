@@ -9,7 +9,7 @@ import semver
 
 from utils.custom_logging import make_logger
 from utils.downloader import Downloader
-from utils.gh import GHRelease, GHSession as GH
+from utils.gh import GHRelease, GHSession
 from utils.progress import Progress
 from utils.threadpool import ThreadPool
 from utils.monkey import nice_exit
@@ -128,15 +128,19 @@ class Updater:
             gh_user: str,
             gh_repo: str,
             asset_filename: str,
+            *,
+            channel: str = 'stable',
             pre_update_func: callable = None,
             cancel_update_func: callable = None,
+            auto_update: bool = False,
+            post_check_func: callable = None
     ):
         """
         :param executable_name: local file to update (usually self)
         :param current_version: current running version
         :param gh_user: Github user name
         :param gh_repo: Github repo name
-        :param asset_filename: name of the asset in the Github release, susually identical to executable_name
+        :param asset_filename: name of the asset in the Github release, usually identical to executable_name
         :param pre_update_func: callable to run before the update; if it returns False, update cancels
         :param cancel_update_func: callable to run in case the update gets cancelled at any point
         """
@@ -144,27 +148,71 @@ class Updater:
         self._current = Version(current_version)
         self._gh_user = gh_user
         self._gh_repo = gh_repo
+        self._channel = None
         self._available = {}
         self._candidates = {}
-        self._latest_release = None
         self._asset_filename = asset_filename
         self._pre_update = pre_update_func
         self._cancel_update_func = cancel_update_func
+        self._auto_update = auto_update
+        self._post_check_func = post_check_func
 
         self._update_ready_to_install = False
 
+        self._latest_remote = None
+        self._latest_candidate = None
+
+        self.channel = channel
+
         self.pool = ThreadPool(_num_threads=1, _basename='updater', _daemon=True)
 
-    def _get_available_releases(self):
+    @property
+    def channel(self):
+        return self._channel
+
+    @channel.setter
+    def channel(self, value):
+        if value not in self.valid_channels:
+            raise ValueError('unknown channel: '.format(value))
+        self._channel = value
+
+    @property
+    def available(self) -> list or None:
+        return self._available
+
+    @property
+    def latest_candidate(self) -> GithubRelease or None:
+        return self._latest_candidate
+
+    @latest_candidate.setter
+    def latest_candidate(self, value: GithubRelease):
+        if not isinstance(value, GithubRelease):
+            raise TypeError('expected GithubRelease instance, got: {}'.format(type(value)))
+        self._latest_candidate = value
+
+    @property
+    def latest_remote(self) -> Version:
+        return self._latest_remote
+
+    @latest_remote.setter
+    def latest_remote(self, value: Version):
+        if not isinstance(value, Version):
+            raise TypeError('expected a Version instance, got: {}'.format(type(value)))
+        self._latest_remote = value
+
+    def _version_check(self):
+
+        logger.info('checking for new version on channel: {}'.format(self.channel))
 
         self._available = {}
 
-        gh = GH()
+        gh = GHSession()
 
         logger.debug('querying GH API for available releases')
         releases = gh.get_all_releases(self._gh_user, self._gh_repo)
 
         if releases:
+            logger.debug('found {} available releases on Github'.format(len(releases)))
             for rel in releases:
                 self._available[rel.version] = GithubRelease(rel)
                 logger.debug('release found: {} ({})'.format(rel.version, self._available[rel.version].channel))
@@ -172,28 +220,11 @@ class Updater:
         else:
             logger.error('no release found for "{}/{}"'.format(self._gh_user, self._gh_repo))
 
-    @property
-    def available(self) -> list or None:
-        return self._available
+        return self._build_candidates_list()
 
-    @property
-    def latest_release(self) -> GithubRelease or None:
-        return self._latest_release
+    def _build_candidates_list(self):
 
-    def _version_check(self, channel: str = 'stable'):
-
-        if channel not in Updater.valid_channels:
-            raise ValueError(channel)
-
-        logger.info('checking for new version on channel: {}'.format(channel))
-
-        self._get_available_releases()
-
-        return self._build_candidates_list(channel)
-
-    def _build_candidates_list(self, channel):
-
-        min_weight = Updater.channel_weights[channel]
+        min_weight = Updater.channel_weights[self.channel]
 
         self._candidates = {}
 
@@ -205,26 +236,33 @@ class Updater:
                 logger.debug('skipping release on channel: {}'.format(version.channel))
                 continue
 
-            logger.debug('comparing current with remote: "{}" vs "{}"'.format(self._current, version))
-
             if self._current.branch is not None and not self._current.branch == version.branch:
-                logger.debug('skipping different alpha branch; own: {} remote: {}'.format(
+                logger.debug('skipping different branch; own: {} remote: {}'.format(
                     self._current.branch, version.branch
                 ))
                 continue
+
+            logger.debug('comparing current with remote: "{}" vs "{}"'.format(self._current, version))
+
+            if self.latest_remote is None or self.latest_remote < version:
+                self.latest_remote = version
 
             if version > self._current:
                 logger.debug('this version is newer: {}'.format(version))
                 self._candidates[version.version_str] = release
 
-        if self._candidates:
+        if self.latest_remote:
+            logger.debug('latest remote version: {}'.format(self.latest_remote.version_str))
 
-            logger.debug('new version found, following up')
+        else:
+            logger.warning('no remote version found')
+
+        if self._candidates:
+            logger.info('new version found, following up')
             return True
 
         else:
-
-            logger.debug('no new version found')
+            logger.info('no new version found')
             return False
 
     def _process_candidates(self):
@@ -254,7 +292,7 @@ class Updater:
                 if version > self._current:
                     logger.debug('{} is newer'.format(version))
                     latest = version
-                    self._latest_release = release
+                    self.latest_candidate = release
 
             return not latest == self._current
 
@@ -269,6 +307,10 @@ class Updater:
 
     def _download_latest_release(self):
 
+        if not self._auto_update:
+            logger.debug('version check done')
+            return
+
         self._update_ready_to_install = False
 
         def _progress_hook(data):
@@ -280,19 +322,16 @@ class Updater:
             Progress.set_label(label)
             Progress.set_value(data['downloaded'] / data['total'] * 100)
 
-        if self._latest_release:
+        if self.latest_candidate:
 
             logger.debug('downloading latest release asset')
 
-            assert isinstance(self._latest_release, GithubRelease)
-            asset = self._latest_release.get_asset_download_url(self._asset_filename)
+            asset = self.latest_candidate.get_asset_download_url(self._asset_filename)
 
             if asset is None:
                 logger.error('no asset found with filename: {}'.format(self._asset_filename))
 
-            assets = self._latest_release.assets
-
-            for asset in assets:
+            for asset in self.latest_candidate.assets:
 
                 logger.debug('checking asset: {}'.format(asset.name))
 
@@ -366,7 +405,8 @@ class Updater:
 
             self.pool.queue_task(
                 task=self._process_candidates,
-                _err_callback=self._cancel_update_func
+                _err_callback=self._cancel_update_func,
+                _task_callback=self._post_check_func
             )
 
             self.pool.queue_task(
@@ -379,12 +419,46 @@ class Updater:
                 _err_callback=self._cancel_update_func
             )
 
-    def version_check(self, channel: str):
+    def version_check(self):
 
         self.pool.queue_task(
             task=self._version_check,
-            kwargs=dict(
-                channel=channel
-            ),
             _task_callback=self._version_check_follow_up,
             _err_callback=self._cancel_update_func)
+
+    def _get_latest_remote(self):
+        new_version_available = self._version_check()
+        return self.latest_remote.version_str if self.latest_remote else None, new_version_available
+
+    def get_latest_remote(self, callback: callable):
+
+        self.pool.queue_task(
+            task=self._get_latest_remote,
+            _task_callback=callback,
+            _err_callback=self._cancel_update_func)
+
+    def _install_latest_remote(self):
+
+        self.pool.queue_task(
+            task=self._process_candidates,
+            _err_callback=self._cancel_update_func,
+            _task_callback=self._post_check_func
+        )
+
+        self.pool.queue_task(
+            task=self._download_latest_release,
+            _err_callback=self._cancel_update_func
+        )
+
+        self.pool.queue_task(
+            task=self._install_update,
+            _err_callback=self._cancel_update_func
+        )
+
+    def install_latest_remote(self):
+
+        self.pool.queue_task(
+            task=self._install_latest_remote,
+            _err_callback=self._cancel_update_func)
+
+
