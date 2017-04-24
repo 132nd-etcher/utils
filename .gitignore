@@ -7,3 +7,4 @@ __pycache__
 /.hypothesis/
 /utils/tests/coverage/
 /utils/.hypothesis/
+*.pyc
