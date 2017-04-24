@@ -36,5 +36,4 @@ setup(
     package_data={'utils.tests': ['utils/tests/api.github.com/*']},
     install_requires=install_requires,
     test_requires=test_requires,
-    # cmdclass=versioneer.get_cmdclass(),
 )
