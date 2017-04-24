@@ -122,6 +122,8 @@ class GithubRelease:
             Progress.set_label(label)
             Progress.set_value(data['downloaded'] / data['total'] * 100)
 
+        logger.debug('downloading {}'.format(asset_filename))
+
         for asset in self.assets:
 
             logger.debug('checking asset: {}'.format(asset.name))
@@ -141,8 +143,9 @@ class GithubRelease:
                 if d.download():
                     return True
 
-                else:
-                    logger.error('download failed')
+        else:
+
+            logger.error('download failed')
 
 
 class AvailableReleases(UserDict):
@@ -364,7 +367,6 @@ class Updater:
             else:
 
                 if self._install_update(executable_path):
-
                     return True
 
     def download_and_install_release(
@@ -418,7 +420,6 @@ class Updater:
                     logger.debug('this is a newer version, updating')
 
                     if self._download_and_install_release(latest_rel, executable_path):
-
                         return True
 
         if cancel_func:
@@ -446,5 +447,3 @@ class Updater:
             _task_callback=success_callback,
             _err_callback=failure_callback,
         )
-
-
