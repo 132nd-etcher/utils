@@ -391,7 +391,8 @@ class Updater:
             *,
             channel: str = 'stable',
             branch: str or Version = None,
-            cancel_func: callable = None,
+            cancel_update_hook: callable = None,
+            pre_update_hook: callable = None,
             executable_path: str or Path = None
     ):
 
@@ -419,19 +420,30 @@ class Updater:
 
                     logger.debug('this is a newer version, updating')
 
-                    if self._download_and_install_release(latest_rel, executable_path):
-                        return True
+                    if pre_update_hook:
 
-        if cancel_func:
+                        if not pre_update_hook():
+                            logger.error('pre-update hook returned False, cancelling update')
+
+                        else:
+                            if self._download_and_install_release(latest_rel, executable_path):
+                                return True
+
+                    else:
+                        if self._download_and_install_release(latest_rel, executable_path):
+                            return True
+
+        if cancel_update_hook:
             logger.debug('calling cancel callback')
-            cancel_func()
+            cancel_update_hook()
 
     def find_and_install_latest_release(
             self,
             *,
             channel: str = 'stable',
             branch: str or Version = None,
-            cancel_func: callable = None,
+            cancel_update_hook: callable = None,
+            pre_update_hook: callable = None,
             failure_callback: callable = None,
             success_callback: callable = None,
             executable_path: str or Path = None
@@ -441,7 +453,8 @@ class Updater:
             kwargs=dict(
                 channel=channel,
                 branch=branch,
-                cancel_func=cancel_func,
+                cancel_update_hook=cancel_update_hook,
+                pre_update_hook=pre_update_hook,
                 executable_path=executable_path,
             ),
             _task_callback=success_callback,

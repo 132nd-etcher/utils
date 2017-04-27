@@ -288,13 +288,13 @@ class TestUpdater:
                 assert upd._find_and_install_latest_release(
                     channel=channel,
                     branch=Version(current).branch,
-                    cancel_func=cancel)
+                    cancel_update_hook=cancel)
                 assert upd._available, upd._available
             else:
                 assert not upd._find_and_install_latest_release(
                     channel=channel,
                     branch=Version(current).branch,
-                    cancel_func=cancel)
+                    cancel_update_hook=cancel)
                 cancel.assert_called_once_with()
 
         assert not Path('./update.bat').exists()
@@ -313,7 +313,7 @@ class TestUpdater:
         )
 
         with HTTMock(mock_gh_api):
-            assert not upd._find_and_install_latest_release(channel='stable', cancel_func=cancel)
+            assert not upd._find_and_install_latest_release(channel='stable', cancel_update_hook=cancel)
 
             cancel.assert_called_once_with()
 
@@ -333,7 +333,7 @@ class TestUpdater:
         )
 
         with HTTMock(mock_gh_api):
-            assert not upd._find_and_install_latest_release(channel='stable', cancel_func=cancel)
+            assert not upd._find_and_install_latest_release(channel='stable', cancel_update_hook=cancel)
 
             cancel.assert_called_once_with()
 
@@ -359,7 +359,7 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert not upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_func=cancel)
+                cancel_update_hook=cancel)
             assert upd._available, upd._available
             assert DummyDownloader.downloaded is True
             cancel.assert_called_once_with()
@@ -386,10 +386,60 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert not upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_func=cancel)
+                cancel_update_hook=cancel)
             assert upd._available, upd._available
             assert DummyDownloader.downloaded is True
             cancel.assert_called_once_with()
+
+        assert not Path('./update.bat').exists()
+        assert not Path('./update.vbs').exists()
+        assert not Path('./update').exists()
+
+    def test_pre_update_hook(self, mocker, tmpdir):
+
+        cancel = mocker.MagicMock()
+        installer = mocker.MagicMock()
+
+        tmpdir.join('example.zip').write('dummy')
+
+        upd = Updater(
+            current_version='0.0.1',
+            gh_user='132nd-etcher',
+            gh_repo='EASI',
+            asset_filename='example.zip',
+        )
+
+        upd._download_and_install_release = installer
+
+        with HTTMock(mock_gh_api):
+
+            pre = mocker.MagicMock(return_value=False)
+
+            assert not upd._find_and_install_latest_release(
+                channel='stable',
+                cancel_update_hook=cancel,
+                pre_update_hook=pre,
+                executable_path=Path(str(tmpdir.join('example.zip')))
+            )
+
+            assert upd._available, upd._available
+            cancel.assert_called_once_with()
+            pre.assert_called_once_with()
+            installer.assert_not_called()
+
+            pre = mocker.MagicMock(return_value=True)
+
+            assert upd._find_and_install_latest_release(
+                channel='stable',
+                cancel_update_hook=cancel,
+                pre_update_hook=pre,
+                executable_path=Path(str(tmpdir.join('example.zip')))
+            )
+
+            assert upd._available, upd._available
+            cancel.assert_called_once_with()
+            pre.assert_called_once_with()
+            assert installer.call_count == 1
 
         assert not Path('./update.bat').exists()
         assert not Path('./update.vbs').exists()
@@ -415,7 +465,7 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_func=cancel,
+                cancel_update_hook=cancel,
                 executable_path=Path(str(tmpdir.join('example.zip')))
             )
 
@@ -451,7 +501,7 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert not upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_func=cancel,
+                cancel_update_hook=cancel,
                 executable_path=Path(str(tmpdir.join('example.zip')))
             )
 
@@ -490,7 +540,7 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert not upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_func=cancel,
+                cancel_update_hook=cancel,
                 executable_path=exe_path
             )
 
@@ -525,7 +575,7 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert not upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_func=cancel,
+                cancel_update_hook=cancel,
                 executable_path=Path(str(tmpdir.join('example.zip')))
             )
 
@@ -559,7 +609,7 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_func=cancel,
+                cancel_update_hook=cancel,
                 executable_path=str(tmpdir.join('example.zip'))
             )
 
@@ -593,7 +643,7 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert not upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_func=cancel,
+                cancel_update_hook=cancel,
                 executable_path=str(tmpdir.join('example.zip'))
             )
 
@@ -627,7 +677,7 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert not upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_func=cancel,
+                cancel_update_hook=cancel,
                 executable_path=str(tmpdir.join('example.zip'))
             )
 
