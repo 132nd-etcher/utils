@@ -1,6 +1,7 @@
 # coding=utf-8
 
 import time
+import functools
 
 from .custom_logging import make_logger, Logged
 from .validator import not_a_bool, not_a_positive_int, not_a_str, not_an_int, valid_bool, valid_float, valid_str, \
@@ -17,13 +18,20 @@ from .monkey import nice_exit
 
 
 def clock(func):
-    def clocked(*args): #
-        t0 = time.perf_counter()
-        result = func(*args) #
-        elapsed = time.perf_counter() - t0
+    @functools.wraps(func)
+    def clocked(*args, **kwargs):
+        t0 = time.time()
+        result = func(*args, **kwargs)
+        elapsed = time.time() - t0
         name = func.__name__
-        arg_str = ', '.join(repr(arg) for arg in args)
-        print('[%0.8fs] %s(%s) -> %r' % (elapsed, name, arg_str, result))
+        arg_lst = []
+        if args:
+            arg_lst.append(', '.join(repr(arg) for arg in args))
+        if kwargs:
+            pairs = ['%s=%r' % (k, w) for k, w in sorted(kwargs.items())]
+            arg_lst.append(', '.join(pairs))
+        arg_str = ', '.join(arg_lst)
+        print('[%0.8fs] %s(%s) -> %r ' % (elapsed, name, arg_str, result))
         return result
     return clocked
 
