@@ -9,6 +9,7 @@ from .gh_objects.gh_ref import GHRef
 from .gh_objects.gh_release import GHRelease, GHAllReleases
 from .gh_objects.gh_repo import GHRepoList, GHRepo
 from .gh_objects.gh_user import GHUser
+from .gh_objects.gh_branch import GHAllBranches
 from utils.custom_logging import make_logger
 from utils.singleton import Singleton
 
@@ -181,6 +182,12 @@ class GHAnonymousSession(requests.Session, metaclass=Singleton):
         self.build_req('repos', user, repo, 'git', 'refs', 'heads', branch)
 
         return GHRef(self._get_json())
+
+    def get_branches(self, user: str, repo: str):
+
+        self.build_req('repos', user, repo, 'branches')
+
+        return GHAllBranches(self._get_json())
 
     def list_authorizations(self, username, password) -> list:
 
