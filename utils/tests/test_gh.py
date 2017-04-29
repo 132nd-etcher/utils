@@ -235,7 +235,7 @@ class TestGH:
         assert latest.name == 'v1.0.0'
         assert latest.prerelease is False
         assert latest.published_at == '2013-02-27T19:35:32Z'
-        assert latest.version == 'v1.0.0'
+        assert latest.tag_name == 'v1.0.0'
         assert latest.url == 'https://api.github.com/repos/octocat/Hello-World/releases/1'
 
     @with_httmock(mock_gh_api)

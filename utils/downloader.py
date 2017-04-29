@@ -56,9 +56,11 @@ class Downloader:
         self.http_pool = get_http_pool()
         self.hexdigest = hexdigest
         self.file_binary_data = None
+
         if progress_hooks is not None and not isinstance(progress_hooks, list):
             raise TypeError(type(progress_hooks))
         self.progress_hooks = progress_hooks or []
+
         self.hash_method = hash_method
 
     def _write_to_file(self):

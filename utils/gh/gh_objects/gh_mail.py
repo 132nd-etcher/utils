@@ -1,9 +1,9 @@
 # coding=utf-8
 
-from .base_gh_object import BaseGHObject, json_property
+from utils.custom_session import JSONObject, json_property
 
 
-class GHMail(BaseGHObject):
+class GHMail(JSONObject):
     @json_property
     def email(self):
         """"""
@@ -17,7 +17,7 @@ class GHMail(BaseGHObject):
         """"""
 
 
-class GHMailList(BaseGHObject):
+class GHMailList(JSONObject):
     def __iter__(self):
         for x in self.json:
             yield GHMail(x)

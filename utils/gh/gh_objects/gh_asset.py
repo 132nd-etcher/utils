@@ -1,10 +1,10 @@
 # coding=utf-8
 
-from .base_gh_object import BaseGHObject, json_property
+from utils.custom_session import json_property, JSONObject
 from .gh_user import GHUser
 
 
-class GHAsset(BaseGHObject):
+class GHAsset(JSONObject):
     @json_property
     def url(self):
         """"""
@@ -53,7 +53,7 @@ class GHAsset(BaseGHObject):
         """"""
 
 
-class GHAllAssets(BaseGHObject):
+class GHAllAssets(JSONObject):
     def __iter__(self):
         for x in self.json:
             yield GHAsset(x)
@@ -62,10 +62,19 @@ class GHAllAssets(BaseGHObject):
         return len(self.json)
 
     def __getitem__(self, item) -> GHAsset:
-        for asset in self:
-            if asset.name == item:
-                return asset
-        raise AttributeError('asset not found: {}'.format(item))
+        if isinstance(item, int):
+            if item > self.__len__() - 1:
+                raise IndexError(item)
+            return GHAsset(self.json[item])
+
+        elif isinstance(item, str):
+            for asset in self:
+                if asset.name == item:
+                    return asset
+            else:
+                raise ValueError('no asset found with name: {}'.format(item))
+
+        raise NotImplementedError('__getitem__ not implemented for type: {}'.format(type(item)))
 
     def __contains__(self, item) -> bool:
         try:

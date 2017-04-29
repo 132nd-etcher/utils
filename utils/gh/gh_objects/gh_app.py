@@ -1,9 +1,9 @@
 # coding=utf-8
 
-from .base_gh_object import BaseGHObject, json_property
+from utils.custom_session import JSONObject, json_property
 
 
-class GHApp(BaseGHObject):
+class GHApp(JSONObject):
     @json_property
     def url(self):
         """"""

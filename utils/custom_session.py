@@ -1,7 +1,5 @@
 # coding=utf-8
-
-
-class BaseGHObject:
+class JSONObject:
     def __init__(self, json):
         self._json = json
 
@@ -23,6 +21,20 @@ class BaseGHObject:
             else:
                 ret.add((k, getattr(self, k)))
         return ret
+
+    def print_all(self, indent=''):
+        for k in sorted((k for k in self.__class__.__dict__)):
+            if k.startswith('__'):
+                continue
+            else:
+                a = getattr(self, k)
+                if callable(a):
+                    print(indent, k, 'count:', len(list(a())))
+                elif hasattr(a, 'print_all'):
+                    print(indent, k, ':')
+                    getattr(a, 'print_all')(indent + '  ')
+                else:
+                    print(indent, k, ':', a)
 
 
 # noinspection PyPep8Naming

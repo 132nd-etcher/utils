@@ -4,7 +4,7 @@ import pytest
 from httmock import HTTMock
 
 from utils import Path, Downloader
-from utils.updater import Version, GithubRelease, Updater, AvailableReleases
+from utils.updater import Version, GithubRelease, GHUpdater, AvailableReleases, Channel
 from .test_gh import mock_gh_api, GHRelease
 
 
@@ -41,7 +41,7 @@ class TestVersion:
     )
     def test_init(self, version_str, channel, branch):
         version = Version(version_str)
-        assert version.channel == channel
+        assert version.channel.channel_name == channel
         assert version.branch == branch
         assert str(version) == version_str
 
@@ -166,9 +166,9 @@ class TestAvailableReleases:
         ar2 = AvailableReleases()
         dummy_available(ar, available)
         dummy_available(ar2, available)
-        ar = ar.filter_by_branch(channel, branch)
+        ar = ar.filter_by_branch(branch)
         if channel in ['alpha', 'beta']:
-            ar2 = ar2.filter_by_branch(channel, Version('0.0.1-{}.{}.1'.format(channel, branch)))
+            ar2 = ar2.filter_by_branch(Version('0.0.1-{}.{}.1'.format(channel, branch)))
             assert ar.keys() == ar2.keys()
         if results:
             assert ar
@@ -212,11 +212,9 @@ class TestAvailableReleases:
 class TestUpdater:
     @pytest.fixture(scope='function')
     def upd(self):
-        upd = Updater(
-            current_version='0.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
-            asset_filename='example.zip',
         )
         yield upd
 
@@ -236,7 +234,7 @@ class TestUpdater:
         Path('./update.bat').remove_p()
         Path('./update').remove_p()
 
-    def test_gather_all_available_releases(self, upd: Updater):
+    def test_gather_all_available_releases(self, upd: GHUpdater):
         assert upd._available == {}
 
         with HTTMock(mock_gh_api):
@@ -271,11 +269,9 @@ class TestUpdater:
         cancel = mocker.MagicMock()
         installer = mocker.MagicMock(return_value=True)
 
-        upd = Updater(
-            current_version=current,
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
-            asset_filename='example.zip',
         )
 
         upd._download_and_install_release = installer
@@ -288,13 +284,17 @@ class TestUpdater:
                 assert upd._find_and_install_latest_release(
                     channel=channel,
                     branch=Version(current).branch,
-                    cancel_update_hook=cancel)
+                    cancel_update_hook=cancel,
+                    current_version=current,
+                )
                 assert upd._available, upd._available
             else:
                 assert not upd._find_and_install_latest_release(
                     channel=channel,
                     branch=Version(current).branch,
-                    cancel_update_hook=cancel)
+                    cancel_update_hook=cancel,
+                    current_version=current,
+                )
                 cancel.assert_called_once_with()
 
         assert not Path('./update.bat').exists()
@@ -305,35 +305,14 @@ class TestUpdater:
 
         cancel = mocker.MagicMock()
 
-        upd = Updater(
-            current_version='0.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='no_asset',
-            asset_filename='example.zip',
         )
 
         with HTTMock(mock_gh_api):
-            assert not upd._find_and_install_latest_release(channel='stable', cancel_update_hook=cancel)
-
-            cancel.assert_called_once_with()
-
-        assert not Path('./update.bat').exists()
-        assert not Path('./update.vbs').exists()
-        assert not Path('./update').exists()
-
-    def test_wrong_asset_name(self, mocker):
-
-        cancel = mocker.MagicMock()
-
-        upd = Updater(
-            current_version='0.0.1',
-            gh_user='132nd-etcher',
-            gh_repo='EASI',
-            asset_filename='i_dont_exist.zip',
-        )
-
-        with HTTMock(mock_gh_api):
-            assert not upd._find_and_install_latest_release(channel='stable', cancel_update_hook=cancel)
+            assert not upd._find_and_install_latest_release(channel='stable', cancel_update_hook=cancel,
+                                                            current_version='0.0.1')
 
             cancel.assert_called_once_with()
 
@@ -345,11 +324,9 @@ class TestUpdater:
 
         cancel = mocker.MagicMock()
 
-        upd = Updater(
-            current_version='0.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
-            asset_filename='example.zip',
         )
 
         mocker.patch('utils.updater.Downloader', new=DummyDownloader)
@@ -359,7 +336,7 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert not upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_update_hook=cancel)
+                cancel_update_hook=cancel, current_version='0.0.1')
             assert upd._available, upd._available
             assert DummyDownloader.downloaded is True
             cancel.assert_called_once_with()
@@ -374,11 +351,9 @@ class TestUpdater:
 
         cancel = mocker.MagicMock()
 
-        upd = Updater(
-            current_version='0.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
-            asset_filename='example.zip',
         )
 
         mocker.patch('utils.updater.Downloader', new=DummyDownloader)
@@ -386,7 +361,7 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert not upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_update_hook=cancel)
+                cancel_update_hook=cancel, current_version='0.0.1', executable_path='t')
             assert upd._available, upd._available
             assert DummyDownloader.downloaded is True
             cancel.assert_called_once_with()
@@ -402,11 +377,9 @@ class TestUpdater:
 
         tmpdir.join('example.zip').write('dummy')
 
-        upd = Updater(
-            current_version='0.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
-            asset_filename='example.zip',
         )
 
         upd._download_and_install_release = installer
@@ -419,7 +392,8 @@ class TestUpdater:
                 channel='stable',
                 cancel_update_hook=cancel,
                 pre_update_hook=pre,
-                executable_path=Path(str(tmpdir.join('example.zip')))
+                executable_path=Path(str(tmpdir.join('example.zip'))),
+                current_version='0.0.1'
             )
 
             assert upd._available, upd._available
@@ -433,7 +407,8 @@ class TestUpdater:
                 channel='stable',
                 cancel_update_hook=cancel,
                 pre_update_hook=pre,
-                executable_path=Path(str(tmpdir.join('example.zip')))
+                executable_path=Path(str(tmpdir.join('example.zip'))),
+                current_version='0.0.1'
             )
 
             assert upd._available, upd._available
@@ -451,11 +426,9 @@ class TestUpdater:
 
         tmpdir.join('example.zip').write('dummy')
 
-        upd = Updater(
-            current_version='0.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
-            asset_filename='example.zip',
         )
 
         mocker.patch('utils.updater.Downloader', new=DummyDownloader)
@@ -466,7 +439,8 @@ class TestUpdater:
             assert upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
-                executable_path=Path(str(tmpdir.join('example.zip')))
+                executable_path=Path(str(tmpdir.join('example.zip'))),
+                current_version='0.0.1'
             )
 
         assert upd._available, upd._available
@@ -485,11 +459,9 @@ class TestUpdater:
 
         tmpdir.join('example.zip').write('dummy')
 
-        upd = Updater(
-            current_version='0.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
-            asset_filename='example.zip',
         )
 
         mocker.patch('utils.updater.Downloader', new=DummyDownloader)
@@ -502,7 +474,8 @@ class TestUpdater:
             assert not upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
-                executable_path=Path(str(tmpdir.join('example.zip')))
+                executable_path=Path(str(tmpdir.join('example.zip'))),
+                current_version='0.0.1'
             )
 
         assert upd._available, upd._available
@@ -522,11 +495,9 @@ class TestUpdater:
 
         tmpdir.join('example.zip').write('dummy')
 
-        upd = Updater(
-            current_version='0.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
-            asset_filename='example.zip',
         )
 
         upd._install_update = install
@@ -541,7 +512,8 @@ class TestUpdater:
             assert not upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
-                executable_path=exe_path
+                executable_path=exe_path,
+                current_version='0.0.1'
             )
 
         assert upd._available, upd._available
@@ -561,11 +533,9 @@ class TestUpdater:
 
         tmpdir.join('example.zip').write('dummy')
 
-        upd = Updater(
-            current_version='999.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
-            asset_filename='example.zip',
         )
 
         mocker.patch('utils.updater.Downloader', new=DummyDownloader)
@@ -576,7 +546,8 @@ class TestUpdater:
             assert not upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
-                executable_path=Path(str(tmpdir.join('example.zip')))
+                executable_path=Path(str(tmpdir.join('example.zip'))),
+                current_version='9999.0.1'
             )
 
         assert upd._available, upd._available
@@ -595,11 +566,9 @@ class TestUpdater:
 
         tmpdir.join('example.zip').write('dummy')
 
-        upd = Updater(
-            current_version='0.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
-            asset_filename='example.zip',
         )
 
         mocker.patch('utils.updater.Downloader', new=DummyDownloader)
@@ -610,7 +579,8 @@ class TestUpdater:
             assert upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
-                executable_path=str(tmpdir.join('example.zip'))
+                executable_path=str(tmpdir.join('example.zip')),
+                current_version='0.0.1'
             )
 
         assert upd._available, upd._available
@@ -629,11 +599,9 @@ class TestUpdater:
 
         tmpdir.join('example.zip').write('dummy')
 
-        upd = Updater(
-            current_version='1.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='no_release',
-            asset_filename='example.zip',
         )
 
         mocker.patch('utils.updater.Downloader', new=DummyDownloader)
@@ -644,7 +612,8 @@ class TestUpdater:
             assert not upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
-                executable_path=str(tmpdir.join('example.zip'))
+                executable_path=str(tmpdir.join('example.zip')),
+                current_version='0.0.1',
             )
 
         assert not upd._available, upd._available
@@ -663,11 +632,9 @@ class TestUpdater:
 
         tmpdir.join('example.zip').write('dummy')
 
-        upd = Updater(
-            current_version='0.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='no_asset',
-            asset_filename='example.zip',
         )
 
         mocker.patch('utils.updater.Downloader', new=DummyDownloader)
@@ -678,7 +645,8 @@ class TestUpdater:
             assert not upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
-                executable_path=str(tmpdir.join('example.zip'))
+                executable_path=str(tmpdir.join('example.zip')),
+                current_version='0.0.1',
             )
 
         assert upd._available, upd._available
@@ -697,11 +665,9 @@ class TestUpdater:
 
         tmpdir.join('example.zip').write('dummy')
 
-        upd = Updater(
-            current_version='0.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='no_asset',
-            asset_filename='example.zip',
         )
 
         mocker.patch('utils.updater.Downloader', new=DummyDownloader)
@@ -711,7 +677,8 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert not upd._find_and_install_latest_release(
                 channel='stable',
-                executable_path=str(tmpdir.join('example.zip'))
+                executable_path=str(tmpdir.join('example.zip')),
+                current_version='0.0.1'
             )
 
         assert upd._available, upd._available
@@ -726,11 +693,9 @@ class TestUpdater:
 
     def test_get_latest_release_from_gh(self):
 
-        upd = Updater(
-            current_version='0.0.1',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
-            asset_filename='example.zip',
         )
 
         with HTTMock(mock_gh_api):
@@ -779,11 +744,9 @@ class TestUpdater:
 
         gather_available = mocker.MagicMock()
 
-        upd = Updater(
-            current_version='9.9.9',
+        upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
-            asset_filename='example.zip',
         )
 
         upd._gather_available_releases = gather_available
@@ -815,37 +778,37 @@ class TestGHRlease:
 
         gh_rel = GithubRelease(GHRelease(json))
         assert gh_rel.version == Version(version_str)
-        assert gh_rel.channel == channel
+        assert gh_rel.channel == Channel(channel)
         assert gh_rel.branch == branch
 
-    @pytest.mark.parametrize(
-        'gh_assets',
-        [
-            (
-                    {"tag_name": "0.0.1",
-                     "assets":
-                         [
-                             {"browser_download_url": "the_url", "name": "example.zip"},
-                         ]
-                     },
-                    'example.zip', 'the_url'
-            ),
-            (
-                    {"tag_name": "0.0.1",
-                     "assets":
-                         [
-                             {"browser_download_url": "the_url1", "name": "EXAMPLE1"},
-                             {"browser_download_url": "the_url2", "name": "EXAMPLE2"},
-                             {"browser_download_url": "the_url3", "name": "EXAMPLE3"},
-                             {"browser_download_url": "the_url4", "name": "EXAMPLE4"},
-                         ]
-                     },
-                    'example3', 'the_url3'
-            ),
-        ]
-    )
-    def test_gh_release_assets(self, gh_assets):
-        json, asset_name, dld_url = gh_assets
-        gh_rel = GithubRelease(GHRelease(json))
-        assert gh_rel.get_asset_download_url('some_asset') is None
-        assert gh_rel.get_asset_download_url(asset_name) == dld_url
+    # @pytest.mark.parametrize(
+    #     'gh_assets',
+    #     [
+    #         (
+    #                 {"tag_name": "0.0.1",
+    #                  "assets":
+    #                      [
+    #                          {"browser_download_url": "the_url", "name": "example.zip"},
+    #                      ]
+    #                  },
+    #                 'example.zip', 'the_url'
+    #         ),
+    #         (
+    #                 {"tag_name": "0.0.1",
+    #                  "assets":
+    #                      [
+    #                          {"browser_download_url": "the_url1", "name": "EXAMPLE1"},
+    #                          {"browser_download_url": "the_url2", "name": "EXAMPLE2"},
+    #                          {"browser_download_url": "the_url3", "name": "EXAMPLE3"},
+    #                          {"browser_download_url": "the_url4", "name": "EXAMPLE4"},
+    #                      ]
+    #                  },
+    #                 'example3', 'the_url3'
+    #         ),
+    #     ]
+    # )
+    # def test_gh_release_assets(self, gh_assets):
+    #     json, asset_name, dld_url = gh_assets
+    #     gh_rel = GithubRelease(GHRelease(json))
+    #     assert gh_rel.get_asset_download_url('some_asset') is None
+    #     assert gh_rel.get_asset_download_url(asset_name) == dld_url
