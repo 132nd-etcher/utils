@@ -1,11 +1,11 @@
 # coding=utf-8
 
-from .base_gh_object import BaseGHObject, json_property
+from utils.custom_session import JSONObject, json_property
 from .gh_user import GHUser
 from .gh_asset import GHAllAssets
 
 
-class GHRelease(BaseGHObject):
+class GHRelease(JSONObject):
     @json_property
     def url(self):
         """"""
@@ -58,12 +58,8 @@ class GHRelease(BaseGHObject):
     def assets_count(self):
         return len(self.assets)
 
-    @property
-    def version(self):
-        return self.tag_name
 
-
-class GHAllReleases(BaseGHObject):
+class GHAllReleases(JSONObject):
     def __iter__(self):
         for x in self.json:
             yield GHRelease(x)

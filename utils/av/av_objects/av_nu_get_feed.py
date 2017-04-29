@@ -3,15 +3,20 @@
 from utils.custom_session import JSONObject, json_property
 
 
-class GHPermissions(JSONObject):
+class AVNuGetFeed(JSONObject):
+
     @json_property
-    def admin(self):
+    def id(self):
         """"""
 
     @json_property
-    def push(self):
+    def name(self):
         """"""
 
     @json_property
-    def pull(self):
+    def publishingEnabled(self):
+        """"""
+
+    @json_property
+    def created(self):
         """"""

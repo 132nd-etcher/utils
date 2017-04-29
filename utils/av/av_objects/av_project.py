@@ -1,69 +1,66 @@
 # coding=utf-8
 
 from utils.custom_session import JSONObject, json_property
+from .av_nu_get_feed import AVNuGetFeed
 
 
-class GHUser(JSONObject):
+class AVProject(JSONObject):
     @json_property
-    def login(self):
+    def projectId(self):
         """"""
 
     @json_property
-    def html_url(self):
+    def accountId(self):
         """"""
 
     @json_property
-    def url(self):
+    def accountName(self):
         """"""
 
     @json_property
-    def id(self):
+    def builds(self):
         """"""
 
     @json_property
-    def avatar_url(self):
+    def name(self):
         """"""
 
     @json_property
-    def repos_url(self):
+    def slug(self):
         """"""
 
     @json_property
-    def type(self):
+    def repositoryType(self):
         """"""
 
     @json_property
-    def company(self):
+    def repositoryScm(self):
         """"""
 
     @json_property
-    def blog(self):
+    def repositoryName(self):
         """"""
 
     @json_property
-    def location(self):
+    def repositoryBranch(self):
         """"""
 
     @json_property
-    def bio(self):
+    def isPrivate(self):
         """"""
 
     @json_property
-    def public_repos(self):
+    def skipBranchesWithoutAppveyorYml(self):
+        """"""
+
+    @property
+    def nuGetFeed(self):
+        return AVNuGetFeed(self.json['nuGetFeed'])
+
+    @json_property
+    def created(self):
         """"""
 
     @json_property
-    def public_gists(self):
-        """"""
-
-    @json_property
-    def created_at(self):
-        """"""
-
-    @json_property
-    def updated_at(self):
-        """"""
-
-    @json_property
-    def email(self):
+    def updated(self):
         """"""

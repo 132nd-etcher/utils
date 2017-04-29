@@ -1,11 +1,11 @@
 # coding=utf-8
 
-from .base_gh_object import BaseGHObject, json_property
+from utils.custom_session import JSONObject, json_property
 from .gh_permissions import GHPermissions
 from .gh_user import GHUser
 
 
-class GHRepo(BaseGHObject):
+class GHRepo(JSONObject):
     def owner(self) -> GHUser:
         return GHUser(self.json['owner'])
 
@@ -101,7 +101,7 @@ class GHRepo(BaseGHObject):
         """"""
 
 
-class GHRepoList(BaseGHObject):
+class GHRepoList(JSONObject):
     def __iter__(self):
         for x in self.json:
             yield GHRepo(x)

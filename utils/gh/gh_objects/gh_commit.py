@@ -3,15 +3,11 @@
 from utils.custom_session import JSONObject, json_property
 
 
-class GHPermissions(JSONObject):
+class GHCommit(JSONObject):
     @json_property
-    def admin(self):
+    def url(self):
         """"""
 
     @json_property
-    def push(self):
-        """"""
-
-    @json_property
-    def pull(self):
+    def sha(self):
         """"""
