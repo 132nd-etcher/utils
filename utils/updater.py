@@ -13,7 +13,7 @@ from utils.custom_logging import make_logger
 from utils.custom_path import Path
 from utils.downloader import Downloader
 from utils.gh import GHRelease, GHSession
-from utils.av import AVSession, AVBuild, AVProject
+from utils.av import AVSession, AVBuild
 from utils.monkey import nice_exit
 from utils.progress import Progress
 from utils.threadpool import ThreadPool
@@ -248,7 +248,8 @@ class AvailableReleases(UserDict):
         for release in self.values():
 
             if release.version.channel < channel:
-                logger.debug('skipping release on channel: {}'.format(release.version.channel))
+                logger.debug('skipping release on channel: {} ({})'.format(
+                    release.version.channel, release.version.version_str))
                 continue
 
             ret.add(release)
@@ -356,15 +357,15 @@ class BaseUpdater(abc.ABC):
         releases = self._contact_remote_host_for_available_releases()
 
         if releases:
-            logger.debug('found {} available releases on Github'.format(len(releases)))
+            logger.debug('found {} available releases'.format(len(releases)))
             for rel in releases:
 
                 try:
                     rel = self._release_caster(rel)
+                    self._available.add(rel)
                 except ValueError:
+                    logger.error('skipping badly formatted release: {}'.format(rel))
                     continue
-
-                self._available.add(rel)
 
                 logger.debug('release found: {} ({})'.format(rel.version, rel.channel))
 
@@ -456,7 +457,7 @@ class BaseUpdater(abc.ABC):
 
     def download_and_install_release(
             self,
-            release: GithubRelease,
+            release: AbstractRelease,
             executable_path: str or Path = None,
             success_callback=None,
             failure_callback=None
