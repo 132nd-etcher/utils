@@ -2,9 +2,9 @@
 
 import requests
 from utils.custom_logging import make_logger
-from utils.av.av_objects.av_last_build import AVLastBuild
-from utils.av.av_objects.av_history import AVHistory
-from utils.av.av_objects.av_artifact import AllAVArtifacts
+from .av_objects.av_last_build import AVLastBuild
+from .av_objects.av_history import AVHistory
+from .av_objects.av_artifact import AllAVArtifacts
 
 
 logger = make_logger(__name__)
@@ -116,54 +116,3 @@ class AVSession(requests.Session):
         self.build_req('projects', av_user_name, av_project_name, 'build', build_id)
 
         return AVLastBuild(self._get_json())
-
-
-if __name__ == '__main__':
-    av = AVSession()
-
-    params = ['132nd-etcher', 'EMFT']
-
-    latest = av.get_last_build(*params)
-    arti = av.get_artifacts(latest.build.jobs[0].jobId)[0]
-    print(arti.size, arti.name, arti.fileName, arti.type)
-
-    print(arti.url_safe_file_name)
-
-    exit(0)
-
-    history = av.get_history('132nd-etcher', 'EMFT')
-    # history.builds.print_all()
-    for latest in history.builds:
-        if not latest.status == 'success':
-            logger.info('skipping failed build: {build.buildId} ({build.commitId})'.format(build=latest))
-            continue
-        try:
-            logger.info('found build: {build.buildId} ({build.commitId}) on branch {build.branch}'.format(build=latest))
-            latest.print_all()
-        except ValueError:
-            logger.warning('skipping badly formatted version: {}'.format(latest._full_version_str))
-            pass
-
-    # from utils.gh import GHSession
-    #
-    #
-    #
-    # rel = GHSession().get_latest_release(*params)
-    #
-    # asset = rel.assets[0]
-    #
-    # print(asset.name)
-
-    #
-    # branches = GHSession().get_branches()
-    #
-    # for b in branches:
-    #     print(b.name)
-
-
-    exit(0)
-    last_build = av.get_last_build('132nd-etcher', 'EMFT', 'feature/av-updater')
-    # last_build = av.get_last_build('132nd-entropy', '132nd-virtual-wing-training-mission-tblisi')
-    last_build.print_all()
-    # for x in last_build.build.jobs.with_artifacts():
-    #     print(av.get_artifacts(x.jobId))
