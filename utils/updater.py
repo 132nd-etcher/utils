@@ -248,7 +248,8 @@ class AvailableReleases(UserDict):
         for release in self.values():
 
             if release.version.channel < channel:
-                logger.debug('skipping release on channel: {}'.format(release.version.channel))
+                logger.debug('skipping release on channel: {} ({})'.format(
+                    release.version.channel, release.version.version_str))
                 continue
 
             ret.add(release)
@@ -456,7 +457,7 @@ class BaseUpdater(abc.ABC):
 
     def download_and_install_release(
             self,
-            release: GithubRelease,
+            release: AbstractRelease,
             executable_path: str or Path = None,
             success_callback=None,
             failure_callback=None
