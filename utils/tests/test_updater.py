@@ -719,6 +719,10 @@ class TestUpdater:
                     'dev', None, '0.0.3-dev.1',
             ),
             (
+                    {'0.0.1', '0.0.2-rc.3', '0.0.3-dev.1'},
+                    'rc', None, '0.0.2-rc.3',
+            ),
+            (
                     {'0.0.1', '0.0.2', '0.0.3-dev.1', '0.0.4-beta.test.1'},
                     'dev', None, '0.0.3-dev.1',
             ),
@@ -763,7 +767,7 @@ class TestUpdater:
         assert not Path('./update').exists()
 
 
-class TestGHRlease:
+class TestGHRelease:
     @pytest.mark.parametrize(
         'gh_release',
         [
