@@ -6,14 +6,23 @@ import urllib.parse
 
 class AVVersion:
     VERSION_RE = re.compile(
-        r'^(?P<version_str>[^+]+)'
+        r'^'
+        r'(?P<version_str>[^+]+)'
         r'\+'
-        r'((?P<metadata>[0-9]+)\.)?'
-        r'Branch\.(?P<branch>[^\.]+)'
+        r'('
+        r'(?P<metadata>[0-9]+)'
         r'\.'
-        r'Sha\.(?P<sha>[a-f0-9]+)'
+        r')?'
+        r'Branch'
         r'\.'
-        r'(?P<av_build>[0-9]+)$')
+        r'(?P<branch>.+)'
+        r'\.'
+        r'Sha'
+        r'\.'
+        r'(?P<sha>[a-f0-9]+)'
+        r'\.'
+        r'(?P<av_build>[0-9]+)'
+        r'$')
 
     def __init__(self, version_str):
         self._full_version_str = version_str
