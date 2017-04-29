@@ -7,7 +7,7 @@ from .custom_path import Path, create_temp_file, create_temp_dir
 from .downloader import Downloader
 from .progress import Progress, ProgressAdapter
 from .singleton import Singleton
-from .updater import GHUpdater, Version, GithubRelease
+from .updater import GHUpdater, Version, GithubRelease, AVUpdater
 from .threadpool import ThreadPool
 from .decorators import TypedProperty
 from .pastebin import create_new_paste
