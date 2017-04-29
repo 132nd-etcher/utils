@@ -359,13 +359,6 @@ class BaseUpdater(abc.ABC):
                 try:
                     # noinspection PyCallingNonCallable
                     rel = self._release_caster(rel)
-
-                    assert isinstance(rel, AbstractRelease)
-
-                    if not self.release_has_assets(rel):
-                        logger.debug('skipping release without asset')
-                        continue
-
                     self._available.add(rel)
                 except ValueError:
                     logger.exception('skipping badly formatted release')
