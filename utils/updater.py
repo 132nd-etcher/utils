@@ -429,6 +429,8 @@ class BaseUpdater(abc.ABC):
                 progress_hooks=[progress_hooks],
                 hash_method=hash_method
             ).download()
+        else:
+            logger.error('release has no asset')
 
     def _download_and_install_release(
             self,
@@ -454,6 +456,9 @@ class BaseUpdater(abc.ABC):
             success_callback=None,
             failure_callback=None
     ):
+
+        logger.info('queuing release download and installation')
+
         self.pool.queue_task(
             self._download_and_install_release,
             kwargs=dict(
