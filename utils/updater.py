@@ -4,7 +4,7 @@ import abc
 import io
 import re
 import subprocess
-from collections import UserDict
+from collections import UserDict, defaultdict
 
 import humanize
 import semver
@@ -419,6 +419,11 @@ class BaseUpdater(abc.ABC):
             progress_hooks = _progress_hook
         if self.release_has_assets(release):
             asset = self.get_downloadable_asset(release)
+
+            Progress.start(
+                title='Downloading update - {}'.format(release.version.version_str),
+            )
+
             return Downloader(
                 url=asset.url,
                 filename='./update',
@@ -587,15 +592,21 @@ class GHUpdater(BaseUpdater):
 
 class AVUpdater(BaseUpdater):
 
+    def _get_artifacts(self, release):
+        if release.version.version_str not in self.__artifacts:
+            build = AVSession().get_build_by_version(
+                self._av_user, self._av_project, release.build.version.url_safe_version_str
+            )
+            job_id = build.build.jobs[0].jobId
+            self.__artifacts[release.version.version_str] = (AVSession().get_artifacts(job_id), job_id)
+        return self.__artifacts[release.version.version_str]
+
     def release_has_assets(self, release: AVRelease) -> bool:
-        pass
+        artifacts, job_id = self._get_artifacts(release)
+        return len(artifacts) > 0
 
     def get_downloadable_asset(self, release: AVRelease) -> DownloadableAsset:
-        build = AVSession().get_build_by_version(
-            self._av_user, self._av_project, release.build.version.url_safe_version_str
-        )
-        job_id = build.build.jobs[0].jobId
-        artifacts = AVSession().get_artifacts(job_id)
+        artifacts, job_id = self._get_artifacts(release)
         return DownloadableAsset(
             r'https://ci.appveyor.com/api/buildjobs/{}/artifacts/{}'.format(job_id, artifacts[0].url_safe_file_name),
             artifacts[0].size,
@@ -620,6 +631,7 @@ class AVUpdater(BaseUpdater):
         super(AVUpdater, self).__init__()
         self._av_user = av_user
         self._av_project = av_project
+        self.__artifacts = {}
 
 
 if __name__ == '__main__':
