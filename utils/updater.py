@@ -4,16 +4,16 @@ import abc
 import io
 import re
 import subprocess
-from collections import UserDict, defaultdict
+from collections import UserDict
 
 import humanize
 import semver
 
+from utils.av import AVSession, AVBuild
 from utils.custom_logging import make_logger
 from utils.custom_path import Path
 from utils.downloader import Downloader
 from utils.gh import GHRelease, GHSession
-from utils.av import AVSession, AVBuild
 from utils.monkey import nice_exit
 from utils.progress import Progress
 from utils.threadpool import ThreadPool
@@ -147,14 +147,12 @@ class Version:
 
 
 class DownloadableAsset:
-
     def __init__(self, url, size):
         self.url = url
         self.size = size
 
 
 class AbstractRelease(abc.ABC):
-
     def __new__(cls, release):
         if isinstance(release, AbstractRelease):
             return release
@@ -177,7 +175,6 @@ class AbstractRelease(abc.ABC):
 
 
 class AVRelease(AbstractRelease):
-
     @property
     def version(self) -> Version:
         return self._version
@@ -200,7 +197,6 @@ class AVRelease(AbstractRelease):
 
 
 class GithubRelease(AbstractRelease):
-
     def __init__(self, gh_release: GHRelease):
         self._gh_release = gh_release
         self._version = Version(self._gh_release.tag_name)
@@ -361,6 +357,7 @@ class BaseUpdater(abc.ABC):
             for rel in releases:
 
                 try:
+                    # noinspection PyCallingNonCallable
                     rel = self._release_caster(rel)
 
                     assert isinstance(rel, AbstractRelease)
@@ -565,7 +562,6 @@ class BaseUpdater(abc.ABC):
 
 
 class GHUpdater(BaseUpdater):
-
     def release_has_assets(self, release: GithubRelease) -> bool:
         return len(release.gh_release.assets) > 0
 
@@ -599,7 +595,6 @@ class GHUpdater(BaseUpdater):
 
 
 class AVUpdater(BaseUpdater):
-
     def _get_artifacts(self, release):
         if release.version.version_str not in self.__artifacts:
             build = AVSession().get_build_by_version(
@@ -633,8 +628,8 @@ class AVUpdater(BaseUpdater):
             av_project: str,
     ):
         """
-        :param gh_user: Github user name
-        :param gh_repo: Github repo name
+        :param av_user: AppVeyor user name
+        :param av_project: AppVeyor repo name
         """
         super(AVUpdater, self).__init__()
         self._av_user = av_user
