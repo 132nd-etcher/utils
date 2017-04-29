@@ -13,7 +13,7 @@ from utils.custom_logging import make_logger
 from utils.custom_path import Path
 from utils.downloader import Downloader
 from utils.gh import GHRelease, GHSession
-from utils.av import AVSession, AVBuild, AVProject
+from utils.av import AVSession, AVBuild
 from utils.monkey import nice_exit
 from utils.progress import Progress
 from utils.threadpool import ThreadPool
