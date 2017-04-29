@@ -478,12 +478,12 @@ class BaseUpdater(abc.ABC):
     def _find_and_install_latest_release(
             self,
             current_version: str or Version,
+            executable_path: str or Path,
             *,
             channel: str = 'stable',
             branch: str or Version = None,
             cancel_update_hook: callable = None,
-            pre_update_hook: callable = None,
-            executable_path: str or Path = None
+            pre_update_hook: callable = None
     ):
 
         self._gather_available_releases()
@@ -533,14 +533,14 @@ class BaseUpdater(abc.ABC):
     def find_and_install_latest_release(
             self,
             current_version: str or Version,
+            executable_path: str or Path,
             *,
             channel: str = 'stable',
             branch: str or Version = None,
             cancel_update_hook: callable = None,
             pre_update_hook: callable = None,
             failure_callback: callable = None,
-            success_callback: callable = None,
-            executable_path: str or Path = None
+            success_callback: callable = None
     ):
         self.pool.queue_task(
             self._find_and_install_latest_release,
@@ -633,19 +633,3 @@ class AVUpdater(BaseUpdater):
         self._av_user = av_user
         self._av_project = av_project
         self.__artifacts = {}
-
-
-if __name__ == '__main__':
-    upd = AVUpdater('132nd-etcher', 'EMFT')
-    upd.pool = ThreadPool(1, 'test_updater', False)
-
-    def print_rel(av_release: AVRelease):
-        if av_release:
-            print('version', av_release.version)
-            print('branch', av_release.branch)
-            print('channel', av_release.channel)
-            print(upd.get_downloadable_asset(av_release))
-
-    # upd.get_latest_release(success_callback=print_rel, channel='alpha', branch='av-updater')
-
-    upd.find_and_install_latest_release('0.0.1')
