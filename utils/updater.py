@@ -364,7 +364,7 @@ class BaseUpdater(abc.ABC):
                     rel = self._release_caster(rel)
                     self._available.add(rel)
                 except ValueError:
-                    logger.error('skipping badly formatted release: {}'.format(rel))
+                    logger.exception('skipping badly formatted release')
                     continue
 
                 logger.debug('release found: {} ({})'.format(rel.version, rel.channel))
