@@ -356,15 +356,15 @@ class BaseUpdater(abc.ABC):
         releases = self._contact_remote_host_for_available_releases()
 
         if releases:
-            logger.debug('found {} available releases on Github'.format(len(releases)))
+            logger.debug('found {} available releases'.format(len(releases)))
             for rel in releases:
 
                 try:
                     rel = self._release_caster(rel)
+                    self._available.add(rel)
                 except ValueError:
+                    logger.error('skipping badly formatted release: {}'.format(rel))
                     continue
-
-                self._available.add(rel)
 
                 logger.debug('release found: {} ({})'.format(rel.version, rel.channel))
 
