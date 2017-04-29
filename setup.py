@@ -32,7 +32,7 @@ setup(
     version=versioneer.get_version(),
     author='132nd-etcher',
     url='https://github.com/132nd-etcher/utils',
-    packages=['utils', 'utils.gh', 'utils.gh.gh_objects', 'utils.decorators', 'utils.av'],
+    packages=['utils', 'utils.gh', 'utils.gh.gh_objects', 'utils.decorators', 'utils.av', 'utils.av.av_objects'],
     package_data={'utils.tests': ['utils/tests/api.github.com/*']},
     install_requires=install_requires,
     test_requires=test_requires,
