@@ -7,6 +7,7 @@ from .av_job import AVAllJobs
 from .av_version import AVVersion
 
 
+# noinspection PyPep8Naming
 class AVBuild(JSONObject):
     @json_property
     def buildId(self):
