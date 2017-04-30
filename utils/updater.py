@@ -170,6 +170,11 @@ class AbstractRelease(abc.ABC):
 
     @property
     @abc.abstractmethod
+    def changelog(self) -> str:
+        """"""
+
+    @property
+    @abc.abstractmethod
     def channel(self) -> Channel:
         """"""
 
@@ -190,6 +195,13 @@ class AVRelease(AbstractRelease):
     @property
     def branch(self) -> str:
         return self.version.branch
+
+    @property
+    def changelog(self):
+        changelog = self.build.message
+        if self.build.messageExtended:
+            changelog += '\n\n' + str(self.build.messageExtended)
+        return changelog
 
     def __init__(self, build: AVBuild):
         self.build = build
@@ -220,6 +232,10 @@ class GithubRelease(AbstractRelease):
     @property
     def branch(self) -> str or None:
         return self._version.branch
+
+    @property
+    def changelog(self) -> str:
+        return self._gh_release.body
 
 
 class AvailableReleases(UserDict):
@@ -359,6 +375,7 @@ class BaseUpdater(abc.ABC):
                 try:
                     # noinspection PyCallingNonCallable
                     rel = self._release_caster(rel)
+                    assert isinstance(rel, AbstractRelease)
                     self._available.add(rel)
                 except ValueError:
                     logger.exception('skipping badly formatted release')
@@ -395,7 +412,6 @@ class BaseUpdater(abc.ABC):
     def _download_asset(
             self,
             release: AbstractRelease,
-            content_length: int = None,
             hexdigest=None,
             download_retries: int = 3,
             block_size: int = 4096,
@@ -405,7 +421,8 @@ class BaseUpdater(abc.ABC):
         """"""
 
         def _progress_hook(data):
-            label = 'Time left: {} ({}/{})'.format(
+            label = '{}\n\nTime left: {} ({}/{})'.format(
+                release.changelog,
                 data['time'],
                 humanize.naturalsize(data['downloaded']),
                 humanize.naturalsize(data['total'])
