@@ -21,22 +21,6 @@ from utils.threadpool import ThreadPool
 logger = make_logger(__name__)
 
 
-class Hooks:
-    def __init__(
-            self,
-            pre: callable,
-            post: callable,
-            fail: callable,
-    ):
-        self._pre = pre
-        self._post = post
-        self._fail = fail
-
-    def run(self, func: callable, *args, **kwargs):
-        if self._pre:
-            self._pre()
-
-
 class Channel:
     valid_channels = [
         'alpha',
