@@ -286,6 +286,7 @@ class TestUpdater:
                     branch=Version(current).branch,
                     cancel_update_hook=cancel,
                     current_version=current,
+                    executable_path='dummy',
                 )
                 assert upd._available, upd._available
             else:
@@ -294,6 +295,7 @@ class TestUpdater:
                     branch=Version(current).branch,
                     cancel_update_hook=cancel,
                     current_version=current,
+                    executable_path='dummy',
                 )
                 cancel.assert_called_once_with()
 
@@ -311,8 +313,12 @@ class TestUpdater:
         )
 
         with HTTMock(mock_gh_api):
-            assert not upd._find_and_install_latest_release(channel='stable', cancel_update_hook=cancel,
-                                                            current_version='0.0.1')
+            assert not upd._find_and_install_latest_release(
+                channel='stable',
+                cancel_update_hook=cancel,
+                current_version='0.0.1',
+                executable_path='dummy',
+            )
 
             cancel.assert_called_once_with()
 
@@ -336,7 +342,10 @@ class TestUpdater:
         with HTTMock(mock_gh_api):
             assert not upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_update_hook=cancel, current_version='0.0.1')
+                cancel_update_hook=cancel,
+                current_version='0.0.1',
+                executable_path='dummy',
+            )
             assert upd._available, upd._available
             assert DummyDownloader.downloaded is True
             cancel.assert_called_once_with()
