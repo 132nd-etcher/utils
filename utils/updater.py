@@ -599,7 +599,7 @@ class AVUpdater(BaseUpdater):
         return self.__artifacts[release.version.version_str]
 
     def release_has_assets(self, release: AVRelease) -> bool:
-        artifacts, job_id = self._get_artifacts(release)
+        artifacts, _ = self._get_artifacts(release)
         return len(artifacts) > 0
 
     def get_downloadable_asset(self, release: AVRelease) -> DownloadableAsset:
