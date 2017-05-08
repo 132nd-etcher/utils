@@ -405,8 +405,7 @@ class BaseUpdater(abc.ABC):
         """"""
 
         def _progress_hook(data):
-            label = '{}\n\nTime left: {} ({}/{})'.format(
-                release.changelog,
+            label = 'Time left: {} ({}/{})'.format(
                 data['time'],
                 humanize.naturalsize(data['downloaded']),
                 humanize.naturalsize(data['total'])
