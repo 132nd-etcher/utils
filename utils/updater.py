@@ -481,8 +481,37 @@ class BaseUpdater(abc.ABC):
             channel: str = 'stable',
             branch: str or Version = None,
             cancel_update_hook: callable = None,
-            pre_update_hook: callable = None
+            pre_update_hook: callable = None,
+            no_new_version_hook: callable = None,
+            no_candidates_hook: callable = None
     ):
+
+        def cancel_update():
+
+            logger.debug('cancelling update')
+
+            if cancel_update_hook:
+
+                logger.debug('running cancel hook')
+                cancel_update_hook()
+
+        def no_new_version():
+
+            logger.debug('no new version found')
+
+            if no_new_version_hook:
+
+                logger.debug('calling no new version hook')
+                no_new_version_hook()
+
+        def no_candidates():
+
+            logger.debug('no candidate found')
+
+            if no_candidates_hook:
+
+                logger.debug('calling no candidate hook')
+                no_candidates_hook()
 
         self._gather_available_releases()
 
@@ -496,6 +525,7 @@ class BaseUpdater(abc.ABC):
 
         if not candidates:
             logger.info('no new version found')
+            return no_candidates()
 
         else:
 
@@ -515,18 +545,16 @@ class BaseUpdater(abc.ABC):
 
                         if not pre_update_hook():
                             logger.error('pre-update hook returned False, cancelling update')
+                            return cancel_update()
 
-                        else:
-                            if self._download_and_install_release(latest_rel, executable_path):
-                                return True
+                    if self._download_and_install_release(latest_rel, executable_path):
+                        return True
 
                     else:
-                        if self._download_and_install_release(latest_rel, executable_path):
-                            return True
+                        return cancel_update()
 
-        if cancel_update_hook:
-            logger.debug('calling cancel callback')
-            cancel_update_hook()
+                else:
+                    return no_new_version()
 
     def find_and_install_latest_release(
             self,
