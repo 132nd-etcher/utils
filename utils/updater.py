@@ -21,22 +21,6 @@ from utils.threadpool import ThreadPool
 logger = make_logger(__name__)
 
 
-class Hooks:
-    def __init__(
-            self,
-            pre: callable,
-            post: callable,
-            fail: callable,
-    ):
-        self._pre = pre
-        self._post = post
-        self._fail = fail
-
-    def run(self, func: callable, *args, **kwargs):
-        if self._pre:
-            self._pre()
-
-
 class Channel:
     valid_channels = [
         'alpha',
@@ -497,8 +481,37 @@ class BaseUpdater(abc.ABC):
             channel: str = 'stable',
             branch: str or Version = None,
             cancel_update_hook: callable = None,
-            pre_update_hook: callable = None
+            pre_update_hook: callable = None,
+            no_new_version_hook: callable = None,
+            no_candidates_hook: callable = None
     ):
+
+        def cancel_update():
+
+            logger.debug('cancelling update')
+
+            if cancel_update_hook:
+
+                logger.debug('running cancel hook')
+                cancel_update_hook()
+
+        def no_new_version():
+
+            logger.debug('no new version found')
+
+            if no_new_version_hook:
+
+                logger.debug('calling no new version hook')
+                no_new_version_hook()
+
+        def no_candidates():
+
+            logger.debug('no candidate found')
+
+            if no_candidates_hook:
+
+                logger.debug('calling no candidate hook')
+                no_candidates_hook()
 
         self._gather_available_releases()
 
@@ -512,6 +525,7 @@ class BaseUpdater(abc.ABC):
 
         if not candidates:
             logger.info('no new version found')
+            return no_candidates()
 
         else:
 
@@ -531,18 +545,16 @@ class BaseUpdater(abc.ABC):
 
                         if not pre_update_hook():
                             logger.error('pre-update hook returned False, cancelling update')
+                            return cancel_update()
 
-                        else:
-                            if self._download_and_install_release(latest_rel, executable_path):
-                                return True
+                    if self._download_and_install_release(latest_rel, executable_path):
+                        return True
 
                     else:
-                        if self._download_and_install_release(latest_rel, executable_path):
-                            return True
+                        return cancel_update()
 
-        if cancel_update_hook:
-            logger.debug('calling cancel callback')
-            cancel_update_hook()
+                else:
+                    return no_new_version()
 
     def find_and_install_latest_release(
             self,
@@ -615,7 +627,7 @@ class AVUpdater(BaseUpdater):
         return self.__artifacts[release.version.version_str]
 
     def release_has_assets(self, release: AVRelease) -> bool:
-        artifacts, job_id = self._get_artifacts(release)
+        artifacts, _ = self._get_artifacts(release)
         return len(artifacts) > 0
 
     def get_downloadable_asset(self, release: AVRelease) -> DownloadableAsset:

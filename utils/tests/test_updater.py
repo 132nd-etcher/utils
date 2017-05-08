@@ -211,12 +211,15 @@ class TestAvailableReleases:
 
 class TestUpdater:
     @pytest.fixture(scope='function')
-    def upd(self):
+    def upd(self, mocker):
+        cancel = mocker.MagicMock()
+        no_new_version = mocker.MagicMock()
+        no_candidate = mocker.MagicMock()
         upd = GHUpdater(
             gh_user='132nd-etcher',
             gh_repo='EASI',
         )
-        yield upd
+        yield upd, cancel, no_new_version, no_candidate
 
     @pytest.fixture(scope='function', autouse=True)
     def reset_downloader(self):
@@ -235,6 +238,7 @@ class TestUpdater:
         Path('./update').remove_p()
 
     def test_gather_all_available_releases(self, upd: GHUpdater):
+        upd, *_ = upd
         assert upd._available == {}
 
         with HTTMock(mock_gh_api):
@@ -264,15 +268,10 @@ class TestUpdater:
             ('0.0.6-alpha.test.1', 'alpha', False),
         ]
     )
-    def test_check_version(self, current, channel, expected_result, mocker):
+    def test_check_version(self, current, channel, expected_result, mocker, upd):
+        upd, cancel, no_new_version, no_candidate = upd
 
-        cancel = mocker.MagicMock()
         installer = mocker.MagicMock(return_value=True)
-
-        upd = GHUpdater(
-            gh_user='132nd-etcher',
-            gh_repo='EASI',
-        )
 
         upd._download_and_install_release = installer
 
@@ -280,24 +279,25 @@ class TestUpdater:
 
         with HTTMock(mock_gh_api):
 
+            result = upd._find_and_install_latest_release(
+                channel=channel,
+                branch=Version(current).branch,
+                cancel_update_hook=cancel,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
+                current_version=current,
+                executable_path='dummy',
+            )
+            cancel.assert_not_called()
+            no_candidate.assert_not_called()
+
             if expected_result:
-                assert upd._find_and_install_latest_release(
-                    channel=channel,
-                    branch=Version(current).branch,
-                    cancel_update_hook=cancel,
-                    current_version=current,
-                    executable_path='dummy',
-                )
+                assert result
                 assert upd._available, upd._available
+                no_new_version.assert_not_called()
             else:
-                assert not upd._find_and_install_latest_release(
-                    channel=channel,
-                    branch=Version(current).branch,
-                    cancel_update_hook=cancel,
-                    current_version=current,
-                    executable_path='dummy',
-                )
-                cancel.assert_called_once_with()
+                assert not result
+                no_new_version.assert_called_with()
 
         assert not Path('./update.bat').exists()
         assert not Path('./update.vbs').exists()
@@ -306,6 +306,8 @@ class TestUpdater:
     def test_no_asset(self, mocker):
 
         cancel = mocker.MagicMock()
+        no_candidate = mocker.MagicMock()
+        no_new_version = mocker.MagicMock()
 
         upd = GHUpdater(
             gh_user='132nd-etcher',
@@ -316,19 +318,22 @@ class TestUpdater:
             assert not upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
                 current_version='0.0.1',
                 executable_path='dummy',
             )
 
             cancel.assert_called_once_with()
+            no_new_version.assert_not_called()
+            no_candidate.assert_not_called()
 
         assert not Path('./update.bat').exists()
         assert not Path('./update.vbs').exists()
         assert not Path('./update').exists()
 
-    def test_download_fail(self, mocker):
-
-        cancel = mocker.MagicMock()
+    def test_download_fail(self, mocker, upd):
+        upd, cancel, no_new_version, no_candidate = upd
 
         upd = GHUpdater(
             gh_user='132nd-etcher',
@@ -343,6 +348,8 @@ class TestUpdater:
             assert not upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
                 current_version='0.0.1',
                 executable_path='dummy',
             )
@@ -356,40 +363,36 @@ class TestUpdater:
         assert not Path('./update.vbs').exists()
         assert not Path('./update').exists()
 
-    def test_install_missing_file(self, mocker):
-
-        cancel = mocker.MagicMock()
-
-        upd = GHUpdater(
-            gh_user='132nd-etcher',
-            gh_repo='EASI',
-        )
+    def test_install_missing_file(self, mocker, upd):
+        upd, cancel, no_new_version, no_candidate = upd
 
         mocker.patch('utils.updater.Downloader', new=DummyDownloader)
 
         with HTTMock(mock_gh_api):
             assert not upd._find_and_install_latest_release(
                 channel='stable',
-                cancel_update_hook=cancel, current_version='0.0.1', executable_path='t')
+                cancel_update_hook=cancel,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
+                current_version='0.0.1',
+                executable_path='t'
+            )
             assert upd._available, upd._available
             assert DummyDownloader.downloaded is True
             cancel.assert_called_once_with()
+            no_candidate.assert_not_called()
+            no_new_version.assert_not_called()
 
         assert not Path('./update.bat').exists()
         assert not Path('./update.vbs').exists()
         assert not Path('./update').exists()
 
-    def test_pre_update_hook(self, mocker, tmpdir):
+    def test_pre_update_hook(self, mocker, tmpdir, upd):
+        upd, cancel, no_new_version, no_candidate = upd
 
-        cancel = mocker.MagicMock()
         installer = mocker.MagicMock()
 
         tmpdir.join('example.zip').write('dummy')
-
-        upd = GHUpdater(
-            gh_user='132nd-etcher',
-            gh_repo='EASI',
-        )
 
         upd._download_and_install_release = installer
 
@@ -400,6 +403,8 @@ class TestUpdater:
             assert not upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
                 pre_update_hook=pre,
                 executable_path=Path(str(tmpdir.join('example.zip'))),
                 current_version='0.0.1'
@@ -407,6 +412,8 @@ class TestUpdater:
 
             assert upd._available, upd._available
             cancel.assert_called_once_with()
+            no_candidate.assert_not_called()
+            no_new_version.assert_not_called()
             pre.assert_called_once_with()
             installer.assert_not_called()
 
@@ -415,6 +422,8 @@ class TestUpdater:
             assert upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
                 pre_update_hook=pre,
                 executable_path=Path(str(tmpdir.join('example.zip'))),
                 current_version='0.0.1'
@@ -424,12 +433,15 @@ class TestUpdater:
             cancel.assert_called_once_with()
             pre.assert_called_once_with()
             assert installer.call_count == 1
+            no_candidate.assert_not_called()
+            no_new_version.assert_not_called()
 
         assert not Path('./update.bat').exists()
         assert not Path('./update.vbs').exists()
         assert not Path('./update').exists()
 
-    def test_install(self, mocker, tmpdir):
+    def test_install(self, mocker, tmpdir, upd):
+        upd, cancel, no_new_version, no_candidate = upd
 
         cancel = mocker.MagicMock()
 
@@ -448,6 +460,8 @@ class TestUpdater:
             assert upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
                 executable_path=Path(str(tmpdir.join('example.zip'))),
                 current_version='0.0.1'
             )
@@ -455,6 +469,8 @@ class TestUpdater:
         assert upd._available, upd._available
         assert DummyDownloader.downloaded is True
         cancel.assert_not_called()
+        no_candidate.assert_not_called()
+        no_new_version.assert_not_called()
         popen.assert_called_with(['wscript.exe', 'update.vbs', 'update.bat'])
         nice_exit.assert_called_with(0)
 
@@ -462,16 +478,10 @@ class TestUpdater:
         assert Path('./update.vbs').exists()
         assert not Path('./update').exists()
 
-    def test_install_download_fail(self, mocker, tmpdir):
-
-        cancel = mocker.MagicMock()
+    def test_install_download_fail(self, mocker, tmpdir, upd):
+        upd, cancel, no_new_version, no_candidate = upd
 
         tmpdir.join('example.zip').write('dummy')
-
-        upd = GHUpdater(
-            gh_user='132nd-etcher',
-            gh_repo='EASI',
-        )
 
         mocker.patch('utils.updater.Downloader', new=DummyDownloader)
         popen = mocker.patch('utils.updater.subprocess.Popen')
@@ -483,6 +493,8 @@ class TestUpdater:
             assert not upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
                 executable_path=Path(str(tmpdir.join('example.zip'))),
                 current_version='0.0.1'
             )
@@ -492,22 +504,18 @@ class TestUpdater:
         cancel.assert_called_with()
         popen.assert_not_called()
         nice_exit.assert_not_called()
+        no_candidate.assert_not_called()
+        no_new_version.assert_not_called()
 
         assert not Path('./update.bat').exists()
         assert not Path('./update.vbs').exists()
         assert not Path('./update').exists()
 
-    def test_install_install_fail(self, mocker, tmpdir):
-
-        cancel = mocker.MagicMock()
+    def test_install_install_fail(self, mocker, tmpdir, upd):
+        upd, cancel, no_new_version, no_candidate = upd
         install = mocker.MagicMock(return_value=False)
 
         tmpdir.join('example.zip').write('dummy')
-
-        upd = GHUpdater(
-            gh_user='132nd-etcher',
-            gh_repo='EASI',
-        )
 
         upd._install_update = install
 
@@ -522,6 +530,8 @@ class TestUpdater:
                 channel='stable',
                 cancel_update_hook=cancel,
                 executable_path=exe_path,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
                 current_version='0.0.1'
             )
 
@@ -531,21 +541,17 @@ class TestUpdater:
         popen.assert_not_called()
         nice_exit.assert_not_called()
         install.assert_called_with(exe_path)
+        no_candidate.assert_not_called()
+        no_new_version.assert_not_called()
 
         assert not Path('./update.bat').exists()
         assert not Path('./update.vbs').exists()
         assert not Path('./update').exists()
 
-    def test_install_no_new_version(self, mocker, tmpdir):
-
-        cancel = mocker.MagicMock()
+    def test_install_no_new_version(self, mocker, tmpdir, upd):
+        upd, cancel, no_new_version, no_candidate = upd
 
         tmpdir.join('example.zip').write('dummy')
-
-        upd = GHUpdater(
-            gh_user='132nd-etcher',
-            gh_repo='EASI',
-        )
 
         mocker.patch('utils.updater.Downloader', new=DummyDownloader)
         popen = mocker.patch('utils.updater.subprocess.Popen')
@@ -555,23 +561,26 @@ class TestUpdater:
             assert not upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
                 executable_path=Path(str(tmpdir.join('example.zip'))),
                 current_version='9999.0.1'
             )
 
         assert upd._available, upd._available
         assert DummyDownloader.downloaded is False
-        cancel.assert_called_with()
+        cancel.assert_not_called()
         popen.assert_not_called()
         nice_exit.assert_not_called()
+        no_candidate.assert_not_called()
+        no_new_version.assert_called_with()
 
         assert not Path('./update.bat').exists()
         assert not Path('./update.vbs').exists()
         assert not Path('./update').exists()
 
-    def test_install_exe_path_as_string(self, mocker, tmpdir):
-
-        cancel = mocker.MagicMock()
+    def test_install_exe_path_as_string(self, mocker, tmpdir, upd):
+        upd, cancel, no_new_version, no_candidate = upd
 
         tmpdir.join('example.zip').write('dummy')
 
@@ -588,6 +597,8 @@ class TestUpdater:
             assert upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
                 executable_path=str(tmpdir.join('example.zip')),
                 current_version='0.0.1'
             )
@@ -597,14 +608,15 @@ class TestUpdater:
         cancel.assert_not_called()
         popen.assert_called_with(['wscript.exe', 'update.vbs', 'update.bat'])
         nice_exit.assert_called_with(0)
+        no_candidate.assert_not_called()
+        no_new_version.assert_not_called()
 
         assert Path('./update.bat').exists()
         assert Path('./update.vbs').exists()
         assert not Path('./update').exists()
 
-    def test_install_no_candidates(self, mocker, tmpdir):
-
-        cancel = mocker.MagicMock()
+    def test_install_no_candidates(self, mocker, tmpdir, upd):
+        upd, cancel, no_new_version, no_candidate = upd
 
         tmpdir.join('example.zip').write('dummy')
 
@@ -621,23 +633,26 @@ class TestUpdater:
             assert not upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
                 executable_path=str(tmpdir.join('example.zip')),
                 current_version='0.0.1',
             )
 
         assert not upd._available, upd._available
         assert DummyDownloader.downloaded is False
-        cancel.assert_called_once_with()
+        cancel.assert_not_called()
         popen.assert_not_called()
         nice_exit.assert_not_called()
+        no_candidate.assert_called_once_with()
+        no_new_version.assert_not_called()
 
         assert not Path('./update.bat').exists()
         assert not Path('./update.vbs').exists()
         assert not Path('./update').exists()
 
-    def test_install_no_asset(self, mocker, tmpdir):
-
-        cancel = mocker.MagicMock()
+    def test_install_no_asset(self, mocker, tmpdir, upd):
+        upd, cancel, no_new_version, no_candidate = upd
 
         tmpdir.join('example.zip').write('dummy')
 
@@ -654,6 +669,8 @@ class TestUpdater:
             assert not upd._find_and_install_latest_release(
                 channel='stable',
                 cancel_update_hook=cancel,
+                no_candidates_hook=no_candidate,
+                no_new_version_hook=no_new_version,
                 executable_path=str(tmpdir.join('example.zip')),
                 current_version='0.0.1',
             )
@@ -663,14 +680,14 @@ class TestUpdater:
         cancel.assert_called_once_with()
         popen.assert_not_called()
         nice_exit.assert_not_called()
+        no_candidate.assert_not_called()
+        no_new_version.assert_not_called()
 
         assert not Path('./update.bat').exists()
         assert not Path('./update.vbs').exists()
         assert not Path('./update').exists()
 
     def test_install_no_cancel_func(self, mocker, tmpdir):
-
-        cancel = mocker.MagicMock()
 
         tmpdir.join('example.zip').write('dummy')
 
@@ -692,7 +709,6 @@ class TestUpdater:
 
         assert upd._available, upd._available
         assert DummyDownloader.downloaded is False
-        cancel.assert_not_called()
         popen.assert_not_called()
         nice_exit.assert_not_called()
 

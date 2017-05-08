@@ -1,17 +1,16 @@
 # coding=utf-8
 
 import requests
-from utils.custom_logging import make_logger
-from .av_objects.av_last_build import AVLastBuild
-from .av_objects.av_history import AVHistory
-from .av_objects.av_artifact import AllAVArtifacts
 
+from utils.custom_logging import make_logger
+from .av_objects.av_artifact import AllAVArtifacts
+from .av_objects.av_history import AVHistory
+from .av_objects.av_last_build import AVLastBuild
 
 logger = make_logger(__name__)
 
 
 class AVSession(requests.Session):
-
     def __init__(self):
 
         requests.Session.__init__(self)
@@ -78,7 +77,6 @@ class AVSession(requests.Session):
         req_params = ['projects', av_user_name, av_project_name]
 
         if branch:
-
             req_params.extend(['branch', branch])
 
         self.build_req(*req_params)
@@ -94,7 +92,6 @@ class AVSession(requests.Session):
     def get_history(self, av_user_name, av_project_name, build_count=9999) -> AVHistory:
         """
         Gets build history from the top down
-        
         :param build_count: max number of builds to retrieve
         :param av_user_name: AV user name 
         :param av_project_name: AV project name
