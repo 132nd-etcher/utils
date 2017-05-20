@@ -396,6 +396,8 @@ class BaseUpdater(abc.ABC):
     def _download_asset(
             self,
             release: AbstractRelease,
+            *,
+            extra_label: str = None,
             hexdigest=None,
             download_retries: int = 3,
             block_size: int = 4096,
@@ -410,6 +412,8 @@ class BaseUpdater(abc.ABC):
                 humanize.naturalsize(data['downloaded']),
                 humanize.naturalsize(data['total'])
             )
+            if extra_label:
+                label = '{}\n\n{}'.format(extra_label, label)
             Progress.set_label(label)
             Progress.set_value(data['downloaded'] / data['total'] * 100)
 
@@ -439,9 +443,10 @@ class BaseUpdater(abc.ABC):
             self,
             release: AbstractRelease,
             executable_path: str or Path,
+            extra_label: str = None
     ):
 
-        if self._download_asset(release):
+        if self._download_asset(release, extra_label=extra_label):
 
             executable_path = Path(executable_path)
 
@@ -477,6 +482,7 @@ class BaseUpdater(abc.ABC):
             current_version: str or Version,
             executable_path: str or Path,
             *,
+            extra_label: str = None,
             channel: str = 'stable',
             branch: str or Version = None,
             cancel_update_hook: callable = None,
@@ -546,7 +552,7 @@ class BaseUpdater(abc.ABC):
                             logger.error('pre-update hook returned False, cancelling update')
                             return cancel_update()
 
-                    if self._download_and_install_release(latest_rel, executable_path):
+                    if self._download_and_install_release(latest_rel, executable_path, extra_label):
                         return True
 
                     else:
