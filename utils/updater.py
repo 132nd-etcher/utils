@@ -365,7 +365,7 @@ class BaseUpdater(abc.ABC):
                     logger.exception('skipping badly formatted release')
                     continue
 
-                logger.debug('release found: {} ({})'.format(rel.version, rel.channel))
+                # logger.debug('release found: {} ({})'.format(rel.version, rel.channel))
 
             return len(self._available) > 0
 
